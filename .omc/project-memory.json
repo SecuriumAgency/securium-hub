@@ -1,0 +1,187 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1792769493653,
+  "projectRoot": "C:\\Securium-Workspace\\securium-hub",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "next",
+        "version": "15.5.28",
+        "category": "fullstack"
+      },
+      {
+        "name": "react",
+        "version": "19.1.0",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.1.0",
+        "category": "frontend"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npx tsc --noEmit; echo \"tsc exit=$?\"; npm run lint; echo \"lint exit=$?\"; git status --short",
+    "testCommand": null,
+    "lintCommand": "npm run lint",
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "next dev --turbopack",
+      "build": "next build --turbopack",
+      "start": "next start",
+      "lint": "eslint"
+    }
+  },
+  "conventions": {
+    "namingStyle": "camelCase",
+    "importStyle": "ES modules",
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "app",
+      "components",
+      "lib",
+      "public"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "app": {
+      "path": "app",
+      "purpose": "Application code",
+      "fileCount": 4,
+      "lastAccessed": 1792769493595,
+      "keyFiles": [
+        "favicon.ico",
+        "globals.css",
+        "layout.tsx",
+        "page.tsx"
+      ]
+    },
+    "components": {
+      "path": "components",
+      "purpose": "UI components",
+      "fileCount": 0,
+      "lastAccessed": 1792769493610,
+      "keyFiles": []
+    },
+    "lib": {
+      "path": "lib",
+      "purpose": "Library code",
+      "fileCount": 2,
+      "lastAccessed": 1792769493613,
+      "keyFiles": [
+        "mock-data.json",
+        "sites.ts"
+      ]
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 5,
+      "lastAccessed": 1792769493616,
+      "keyFiles": [
+        "file.svg",
+        "globe.svg",
+        "next.svg",
+        "vercel.svg",
+        "window.svg"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "app/page.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1792771093464,
+      "type": "file"
+    },
+    {
+      "path": "lib/use-fleet.ts",
+      "accessCount": 3,
+      "lastAccessed": 1792771041172,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/SitePanel.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1792771076825,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/models.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1792771044189,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/SiteNode.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1792771061974,
+      "type": "file"
+    },
+    {
+      "path": "lib/mock-data.json",
+      "accessCount": 1,
+      "lastAccessed": 1792771011692,
+      "type": "file"
+    },
+    {
+      "path": "lib/sites.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792771013471,
+      "type": "file"
+    },
+    {
+      "path": "app/api/fleet/route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792771028525,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/NetworkLinks.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1792771059204,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/FleetHud.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1792771078223,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1792771528801,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

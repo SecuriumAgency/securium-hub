@@ -1,0 +1,7 @@
+{
+  "tool_name": "PowerShell",
+  "tool_input_preview": "{\"command\":\"$dst = \\\"C:\\\\Users\\\\UTILIS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Securium-Workspace-securium-hub\\\\e0280b85-2f53-4ec0-bce6-6d743e486064\\\\scratchpad\\\\hub-copy\\\"; $item = Get-Item \\\"$dst\\\\node_...",
+  "error": "Exit code 1\nTrue\r\nFalse\r\nrobocopy exit=1 en 29s\r\nTrue",
+  "timestamp": "2026-10-23T16:00:06.098Z",
+  "retry_count": 2
+}

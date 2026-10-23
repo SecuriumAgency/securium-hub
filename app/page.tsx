@@ -1,103 +1,95 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, OrthographicCamera } from "@react-three/drei";
+import { FleetHud } from "@/components/hub/FleetHud";
+import { Ground } from "@/components/hub/Ground";
+import { NetworkLinks } from "@/components/hub/NetworkLinks";
+import { SiteNode } from "@/components/hub/SiteNode";
+import { SitePanel } from "@/components/hub/SitePanel";
+import { useFleet } from "@/lib/use-fleet";
+
+const TARGET: [number, number, number] = [0, 1.5, 0];
+
+function IsometricCamera() {
+  const size = useThree((state) => state.size);
+  // Cadre la maquette (~24 × 20 unités projetées) quelle que soit la taille de l'écran.
+  const zoom = Math.max(Math.min(size.width / 24, size.height / 20), 1);
+
+  return (
+    <OrthographicCamera
+      makeDefault
+      position={[TARGET[0] + 20, TARGET[1] + 20, TARGET[2] + 20]}
+      zoom={zoom}
+      near={0.1}
+      far={200}
+    />
+  );
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const sites = useFleet();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedSite = sites.find((site) => site.id === selectedId);
+  // Conteneur des overlays drei <Html>. Sans portal, drei vise d'abord le parent du <canvas>
+  // puis, une fois les événements R3F connectés, un autre élément : chaque <Html> est alors
+  // démonté et recréé à chaud, et une étiquette se perd. Cette ref est remplie avant le rendu
+  // du Canvas (drei la type non nullable, d'où le cast).
+  const overlay = useRef<HTMLElement>(null) as RefObject<HTMLElement>;
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  return (
+    <main ref={overlay} className="relative h-dvh w-full overflow-hidden bg-[#05070d]">
+      {/* Le Canvas reste monté en permanence (ni rendu conditionnel ni key) : un rafraîchissement
+          de la flotte ne recrée jamais le contexte WebGL, R3F se contente de réconcilier la scène. */}
+      <Canvas shadows="percentage" dpr={[1, 2]} onPointerMissed={() => setSelectedId(null)}>
+        <color attach="background" args={["#05070d"]} />
+        <IsometricCamera />
+        <OrbitControls
+          makeDefault
+          target={TARGET}
+          minZoom={10}
+          maxZoom={160}
+          minPolarAngle={Math.PI / 8}
+          maxPolarAngle={Math.PI / 2.6}
+        />
+
+        <ambientLight intensity={0.45} />
+        <hemisphereLight args={["#38bdf8", "#020617", 0.6]} />
+        <directionalLight
+          castShadow
+          position={[8, 16, 6]}
+          intensity={1.6}
+          shadow-mapSize={[2048, 2048]}
+          shadow-camera-left={-14}
+          shadow-camera-right={14}
+          shadow-camera-top={14}
+          shadow-camera-bottom={-14}
+        />
+
+        <Ground />
+        <NetworkLinks sites={sites} />
+        {sites.map((site) => (
+          <SiteNode
+            key={site.id}
+            site={site}
+            selected={site.id === selectedId}
+            onSelect={setSelectedId}
+            portal={overlay}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        ))}
+        <SitePanel site={selectedSite} onClose={() => setSelectedId(null)} portal={overlay} />
+      </Canvas>
+
+      <FleetHud sites={sites} />
+    </main>
   );
 }
