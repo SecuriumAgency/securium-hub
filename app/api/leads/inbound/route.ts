@@ -1,16 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { after, NextResponse, type NextRequest } from "next/server";
+import { isAuthorized } from "@/lib/api-key";
 import { prisma } from "@/lib/prisma";
 import { notifyDiscord } from "@/lib/discord";
 import { parseInboundLead } from "@/lib/leads";
-
-// Comparaison en temps constant. Hacher les deux valeurs aligne leurs longueurs, condition
-// de timingSafeEqual, sans révéler la longueur de la clé.
-function isAuthorized(header: string | null, secret: string) {
-  const token = header?.match(/^Bearer (.+)$/)?.[1] ?? "";
-  const digest = (value: string) => createHash("sha256").update(value).digest();
-  return timingSafeEqual(digest(token), digest(secret));
-}
 
 // Appelée côté serveur par les sites de la flotte à chaque formulaire envoyé.
 // Header attendu : `Authorization: Bearer <HUB_SECRET_KEY>`.

@@ -63,7 +63,7 @@ curl -X POST https://<hub>/api/leads/inbound \
 
 ## Accès admin
 
-Tout le Hub (dashboard, `/api/fleet`, `/api/leads`) exige une session admin, sauf `/login` et `/api/leads/inbound`, protégée par `HUB_SECRET_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
+Tout le Hub (dashboard, `/api/fleet`, `/api/leads`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound`, protégée par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
 
 `/login` compare le mot de passe à `ADMIN_PASSWORD`, puis pose le cookie HttpOnly `securium_admin_session`, valable 7 jours et signé HMAC-SHA256 avec `SESSION_SECRET` (`lib/session.ts`) : un cookie modifié, expiré ou signé avec une autre clé est refusé. Changer `SESSION_SECRET` déconnecte toutes les sessions.
 
@@ -76,12 +76,23 @@ Générer `SESSION_SECRET` : `node -e "console.log(require('crypto').randomBytes
 
 ## Télémétrie des agents
 
-`GET /api/telemetry` renvoie l'état des agents de Securium-OS, affiché dans le panneau « Agents » à gauche, actualisé toutes les 10 s :
+Le poste Securium pousse l'état de ses agents vers le Hub : le daemon `securium-fleet-watch` (`Securium-OS/agent-dashboard`, `scripts/hub-telemetry.mts`) envoie un rapport toutes les 10 s à `POST /api/telemetry`. Le panneau « Agents » à gauche le relit toutes les 10 s par `GET /api/telemetry`. La télémétrie fonctionne donc sur Vercel comme en local.
 
-- **Statut** : un agent est actif quand son script (`scripts/run-cfo.sh`, `run-devops.sh`, `run-prospector.sh`, `run-seo.sh`, `simulate-market.sh`, `sec-orchestrator.sh`) tourne dans un `bash.exe` du poste. La liste vient de PowerShell (`Get-CimInstance Win32_Process`), soit environ 1 s par appel ; le résultat est gardé 5 s. Un agent arrêté dont la dernière ligne est une erreur passe en « Erreur ».
-- **Journal** : les 64 derniers Ko de `Securium-OS/logs/agent-activity.log` donnent la dernière action de chaque agent et les 40 lignes les plus récentes. Les lignes ne sont pas horodatées : seule la date de dernière écriture du fichier est affichée. Autre chemin : `AGENT_LOG_PATH`.
+Contenu du rapport, calculé sur le poste :
 
-Cette télémétrie n'existe que si le Hub tourne sur le poste (`npm run dev` ou `npm start` dans `C:\Securium-Workspace\securium-hub`). Sur Vercel, ni le journal ni les processus du poste ne sont lisibles : le panneau l'indique. Pour l'avoir en production, les agents devront pousser leurs événements vers le Hub, comme les satellites poussent leurs leads.
+- **Statut des agents** : un agent est actif quand son script (`scripts/run-cfo.sh`, `run-devops.sh`, `run-prospector.sh`, `run-seo.sh`, `simulate-market.sh`, `sec-orchestrator.sh`) tourne dans un `bash.exe` du poste (PowerShell, `Get-CimInstance Win32_Process`). Un agent arrêté dont la dernière ligne est une erreur passe en « Erreur ».
+- **Journal** : les 64 derniers Ko de `Securium-OS/logs/agent-activity.log` donnent la dernière action de chaque agent et les 40 lignes les plus récentes. Les lignes ne sont pas horodatées : seule la date de dernière écriture du fichier est transmise.
+- **Processus PM2** : nom, statut, démarrage, redémarrages, mémoire, CPU et cron de chaque processus (`pm2 jlist`). Leur environnement, qui contient des secrets, n'est jamais envoyé.
+
+`POST /api/telemetry` attend `Authorization: Bearer <HUB_API_KEY>` et un corps JSON de 256 Ko au plus. Le canal est chiffré par HTTPS : le daemon refuse une URL en `http://`, sauf vers la boucle locale (Hub en développement). Réponses : 200 `{ receivedAt }`, 400 JSON invalide, 401 clé invalide, 413 rapport trop volumineux, 422 rapport invalide (`details` liste les erreurs), 503 `HUB_API_KEY` absente ou de moins de 32 caractères. Les textes trop longs sont tronqués et les listes coupées (32 agents, 40 lignes, 32 processus) : seul un champ du mauvais type fait rejeter le rapport. La forme du rapport est `TelemetryReport` dans `lib/telemetry.ts`.
+
+Le dernier rapport est gardé dans le Runtime Cache de Vercel (`@vercel/functions`), partagé par les instances de la région, sans écriture en base toutes les 10 s. Il reste lisible 24 h. Au-delà de 30 s sans rapport (trois rapports manqués), `GET` le signale périmé (`stale`) : le panneau affiche alors les agents en « Inconnu » et indique depuis quand le poste ne répond plus. Hors Vercel (`npm run dev`), le cache est en mémoire du processus : il se vide au redémarrage du serveur.
+
+| Variable | Où | Rôle |
+| --- | --- | --- |
+| `HUB_API_KEY` | projet Vercel du Hub, et `.env.local` d'`agent-dashboard` | Clé partagée avec le daemon, 32 caractères minimum, la même des deux côtés. Sans elle, `POST /api/telemetry` répond 503 |
+
+Générer la clé : `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

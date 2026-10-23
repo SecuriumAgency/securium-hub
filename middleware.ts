@@ -4,10 +4,15 @@ import { SESSION_COOKIE, sessionSecret, verifySessionToken } from "@/lib/session
 // Ouvertes sans session : la page de connexion, et la réception des leads, appelée par les
 // satellites (sans cookie) et protégée par sa propre clé, HUB_SECRET_KEY.
 const PUBLIC_PATHS = new Set(["/login", "/api/leads/inbound"]);
+// En POST seulement : les rapports du daemon securium-fleet-watch, protégés par HUB_API_KEY.
+// GET /api/telemetry, lu par le HUD, reste derrière la session.
+const PUBLIC_POSTS = new Set(["/api/telemetry"]);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
+  if (PUBLIC_PATHS.has(pathname) || (request.method === "POST" && PUBLIC_POSTS.has(pathname))) {
+    return NextResponse.next();
+  }
 
   const secret = sessionSecret();
   const token = request.cookies.get(SESSION_COOKIE)?.value;
