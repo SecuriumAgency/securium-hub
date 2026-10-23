@@ -6,6 +6,7 @@ import { Edges, Html, useCursor } from "@react-three/drei";
 import { MathUtils, type Group, type Mesh, type MeshBasicMaterial, type RingGeometry } from "three";
 import { Crown } from "lucide-react";
 import type { Site, SiteStatus } from "@/lib/sites";
+import { FeedPulse } from "./FeedPulse";
 import { BuildingModel, HeadquartersModel, palette, siteAccent, siteHeight } from "./models";
 
 // Onde au pied du QG : PULSE_COUNT anneaux décalés, chacun passe de 1× à (1 + PULSE_GROWTH)× son
@@ -76,6 +77,8 @@ export const SiteNode = memo(function SiteNode({ site, selected, onSelect, porta
         <meshStandardMaterial color="#0f172a" roughness={0.8} />
         <Edges color={accent} lineWidth={1} transparent opacity={active ? 0.9 : 0.3} />
       </mesh>
+
+      {isHq && <FeedPulse plot={plot} />}
 
       {isHq && (
         <group ref={pulses} name="hq-pulse">

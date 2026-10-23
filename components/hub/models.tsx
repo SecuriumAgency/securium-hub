@@ -3,8 +3,9 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Edges } from "@react-three/drei";
-import type { Mesh, MeshStandardMaterial } from "three";
+import { AdditiveBlending, MathUtils, type BoxGeometry, type Mesh, type MeshBasicMaterial, type MeshStandardMaterial } from "three";
 import type { Site } from "@/lib/sites";
+import { useTelemetrySignals } from "@/lib/use-telemetry";
 
 export const palette = {
   online: "#22d3ee",
@@ -21,6 +22,16 @@ const HQ_HEIGHT = 7.6;
 // Clignotement d'alerte des bâtiments hors ligne : intensité émissive maximale et pulsation (rad/s).
 const ALERT_INTENSITY = 0.9;
 const ALERT_SPEED = 7;
+
+// Alerte du QG : un agent critique (Orchestrateur) en erreur selon la télémétrie du poste. La tour
+// s'allume en rouge et une aura additive pulse autour, plus lentement que les sites hors ligne.
+const HQ_ALERT_COLOR = "#ef4444";
+const HQ_ALERT_INTENSITY = 1.2;
+const HQ_ALERT_SPEED = 3.5;
+const HQ_AURA_OPACITY = 0.3;
+
+// Décor : il ne doit ni capter le survol ni masquer le clic sur le QG.
+const noRaycast = () => null;
 
 export function siteHeight(site: Site) {
   return site.kind === "hq" ? HQ_HEIGHT : 1.2 + site.traffic / 5000;
@@ -95,9 +106,24 @@ export function BuildingModel({ site, active }: ModelProps) {
 
 export function HeadquartersModel({ active }: ModelProps) {
   const halo = useRef<Mesh>(null);
+  const tower = useRef<MeshStandardMaterial>(null);
+  const aura = useRef<Mesh<BoxGeometry, MeshBasicMaterial>>(null);
+  // De 0 à 1, amorti : l'alerte monte et s'éteint en fondu au lieu de basculer d'un coup.
+  const alertLevel = useRef(0);
+  // Seul ce modèle se re-rend quand l'alerte bascule ; le reste de la scène n'est pas touché.
+  const { hqAlert } = useTelemetrySignals();
 
-  useFrame((_, delta) => {
+  // emissiveIntensity de la tour et opacité de l'aura ne sont pilotées que d'ici ; leurs props
+  // JSX restent à 0 et ne sont jamais réappliquées.
+  useFrame(({ clock }, delta) => {
     if (halo.current) halo.current.rotation.z += delta * 0.6;
+    alertLevel.current = MathUtils.damp(alertLevel.current, hqAlert ? 1 : 0, 3, delta);
+    const glow = alertLevel.current * (0.5 + 0.5 * Math.sin(clock.elapsedTime * HQ_ALERT_SPEED)) ** 2;
+    if (tower.current) tower.current.emissiveIntensity = HQ_ALERT_INTENSITY * glow;
+    if (aura.current) {
+      aura.current.visible = alertLevel.current > 0.001;
+      aura.current.material.opacity = HQ_AURA_OPACITY * glow;
+    }
   });
 
   return (
@@ -110,8 +136,27 @@ export function HeadquartersModel({ active }: ModelProps) {
 
       <mesh position={[0, 3.1, 0]} castShadow receiveShadow>
         <boxGeometry args={[2.2, 5, 2.2]} />
-        <meshStandardMaterial color="#292524" roughness={0.35} metalness={0.6} />
+        <meshStandardMaterial
+          ref={tower}
+          color="#292524"
+          emissive={HQ_ALERT_COLOR}
+          emissiveIntensity={0}
+          roughness={0.35}
+          metalness={0.6}
+        />
         <Edges color={palette.hq} lineWidth={2} transparent opacity={active ? 1 : 0.7} />
+      </mesh>
+
+      <mesh ref={aura} position={[0, 3.1, 0]} raycast={noRaycast}>
+        <boxGeometry args={[2.7, 5.5, 2.7]} />
+        <meshBasicMaterial
+          color={HQ_ALERT_COLOR}
+          transparent
+          opacity={0}
+          blending={AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
       </mesh>
 
       {Array.from({ length: 6 }, (_, floor) => (

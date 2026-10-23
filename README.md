@@ -86,6 +86,8 @@ Contenu du rapport, calculé sur le poste :
 
 `POST /api/telemetry` attend `Authorization: Bearer <HUB_API_KEY>` et un corps JSON de 256 Ko au plus. Le canal est chiffré par HTTPS : le daemon refuse une URL en `http://`, sauf vers la boucle locale (Hub en développement). Réponses : 200 `{ receivedAt }`, 400 JSON invalide, 401 clé invalide, 413 rapport trop volumineux, 422 rapport invalide (`details` liste les erreurs), 503 `HUB_API_KEY` absente ou de moins de 32 caractères. Les textes trop longs sont tronqués et les listes coupées (32 agents, 40 lignes, 32 processus) : seul un champ du mauvais type fait rejeter le rapport. La forme du rapport est `TelemetryReport` dans `lib/telemetry.ts`.
 
+La scène 3D lit le même état, par le store de `lib/use-telemetry.ts`, que `Home` alimente ; seul le dernier rapport frais compte. Si l'Orchestrateur est en erreur, la tour du QG pulse en rouge, entourée d'une aura. Si `securium-fleet-watch` est en ligne dans PM2, un anneau cyan respire autour du terrain du QG. Les deux effets s'allument et s'éteignent en fondu, animés dans `useFrame` : seul le composant concerné se re-rend quand un signal bascule, jamais le `<Canvas>`. Règles : `telemetrySignals` dans `lib/telemetry.ts`.
+
 Le dernier rapport est gardé dans le Runtime Cache de Vercel (`@vercel/functions`), partagé par les instances de la région, sans écriture en base toutes les 10 s. Il reste lisible 24 h. Au-delà de 30 s sans rapport (trois rapports manqués), `GET` le signale périmé (`stale`) : le panneau affiche alors les agents en « Inconnu » et indique depuis quand le poste ne répond plus. Hors Vercel (`npm run dev`), le cache est en mémoire du processus : il se vide au redémarrage du serveur.
 
 | Variable | Où | Rôle |

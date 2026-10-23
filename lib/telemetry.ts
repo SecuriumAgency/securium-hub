@@ -63,6 +63,24 @@ export type TelemetryResponse = {
   updatedAt: string;
 };
 
+// Signaux de la scène 3D, tirés du dernier rapport s'il est frais : un rapport périmé ne dit plus
+// ce qui tourne, donc ni alerte ni flux. hqAlert : un agent critique est en erreur, le QG pulse en
+// rouge. feedActive : le daemon de télémétrie est en ligne dans PM2, l'anneau du QG respire en cyan.
+export type TelemetrySignals = { hqAlert: boolean; feedActive: boolean };
+
+const CRITICAL_AGENTS = new Set(["Orchestrateur"]);
+// Daemon qui pousse la télémétrie : tant qu'il tourne, le flux est vivant.
+const FEED_PROCESS = "securium-fleet-watch";
+
+export function telemetrySignals(data: TelemetryResponse): TelemetrySignals {
+  const report = data.stale ? null : data.report;
+  return {
+    hqAlert: report?.agents.some((agent) => CRITICAL_AGENTS.has(agent.name) && agent.status === "error") ?? false,
+    feedActive:
+      report?.pm2.processes.some((service) => service.name === FEED_PROCESS && service.status === "online") ?? false,
+  };
+}
+
 const AGENT_STATUSES: readonly string[] = ["running", "idle", "error", "unknown"];
 const EVENT_STATUSES: readonly string[] = ["active", "paused", "error"];
 const PM2_STATES: readonly string[] = ["online", "offline", "unavailable"];

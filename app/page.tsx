@@ -12,6 +12,7 @@ import { SitePanel } from "@/components/hub/SitePanel";
 import { TrafficSystem } from "@/components/hub/TrafficSystem";
 import { useFleet } from "@/lib/use-fleet";
 import { useLeadsPolling } from "@/lib/use-leads";
+import { useTelemetryPolling } from "@/lib/use-telemetry";
 
 const TARGET: [number, number, number] = [0, 1.5, 0];
 
@@ -33,8 +34,10 @@ function IsometricCamera() {
 
 export default function Home() {
   const sites = useFleet();
-  // Alimente le store des leads sans state local : ses mises à jour ne re-rendent pas Home.
+  // Alimentent les stores des leads et de la télémétrie sans state local : leurs mises à jour ne
+  // re-rendent pas Home, seulement leurs abonnés (HUD, panneaux, effets 3D du QG).
   useLeadsPolling();
+  useTelemetryPolling();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedSite = sites.find((site) => site.id === selectedId);
   // Conteneur des overlays drei <Html>. Sans portal, drei vise d'abord le parent du <canvas>

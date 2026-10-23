@@ -29,7 +29,7 @@ const scheduledStyle: Style = { label: "Planifié", dot: "bg-slate-500", text: "
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? "s" : ""}`;
 
 // Supervision des agents de Securium-OS, posée à gauche par-dessus la scène, hors du <Canvas>.
-// Son état de polling est local : une actualisation ne re-rend que ce panneau.
+// Abonné au store de télémétrie (alimenté par Home) : une actualisation ne re-rend que ses abonnés.
 export function AgentsPanel() {
   const { data, failed } = useTelemetry();
   const [open, setOpen] = useState(true);
