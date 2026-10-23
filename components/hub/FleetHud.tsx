@@ -7,7 +7,7 @@ import { formatNumber, type Site } from "@/lib/sites";
 import { useLeads } from "@/lib/use-leads";
 
 export function FleetHud({ sites }: { sites: Site[] }) {
-  const leads = useLeads();
+  const leads = useLeads().data;
   const onlineCount = sites.filter((site) => site.status === "online").length;
   const total = (metric: keyof SiteMetrics) =>
     leads ? formatNumber(sites.reduce((sum, site) => sum + (leads.metrics[site.id]?.[metric] ?? 0), 0)) : "—";
@@ -16,7 +16,7 @@ export function FleetHud({ sites }: { sites: Site[] }) {
     <>
       <header className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-3 p-4 sm:p-6">
         <div className="rounded-2xl border border-white/10 bg-slate-900/40 px-4 py-3 backdrop-blur-xl">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-300">God Mode</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-300">Securium Core</p>
           <h1 className="text-lg font-semibold text-white">Securium Hub</h1>
         </div>
         <dl className="flex flex-wrap gap-2">

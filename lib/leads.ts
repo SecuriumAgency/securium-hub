@@ -2,11 +2,25 @@ import { initialSites } from "./sites";
 
 export type SiteMetrics = { leadsThisMonth: number; leadsTotal: number };
 
+// Lead tel que renvoyé par GET /api/leads, date sérialisée en ISO.
+export type LeadRecord = {
+  id: string;
+  siteId: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  service: string;
+  source: string;
+  createdAt: string;
+};
+
 // Réponse de GET /api/leads.
 export type LeadsResponse = {
   // Début du mois courant (minuit, heure de Paris), borne de `leadsThisMonth`.
   monthStart: string;
   metrics: Record<string, SiteMetrics>;
+  // Historique complet de la flotte, du plus récent au plus ancien.
+  leads: LeadRecord[];
   updatedAt: string;
 };
 

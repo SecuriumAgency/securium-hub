@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Securium Hub · God Mode",
-  description: "Dashboard 3D de la flotte de sites Securium Agency.",
+  title: "Securium Core",
+  description: "Centre de commandement 3D de Securium Agency : flotte de sites, leads et agents.",
 };
 
 export default function RootLayout({

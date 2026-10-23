@@ -33,7 +33,11 @@ Sans token, la route répond 503 et tous les satellites restent en statut inconn
 
 ## Base de leads (Prisma)
 
-Le Hub est la source de vérité des leads. Les sites de la flotte les envoient à `POST /api/leads/inbound`, qui les enregistre puis les publie sur Discord. `GET /api/leads` renvoie le nombre de leads par site, interrogé toutes les 60 s par le HUD : `{ monthStart, metrics: { [siteId]: { leadsThisMonth, leadsTotal } }, updatedAt }`. Le mois commence à minuit heure de Paris, et chaque site figure dans la réponse, à 0 s'il n'a reçu aucun lead.
+Le Hub est la source de vérité des leads. Les sites de la flotte les envoient à `POST /api/leads/inbound`, qui les enregistre puis les publie sur Discord. `GET /api/leads` renvoie l'historique complet, sans borne de date, et le nombre de leads par site ; le dashboard l'interroge toutes les 20 s : `{ monthStart, metrics: { [siteId]: { leadsThisMonth, leadsTotal } }, leads: [{ id, siteId, name, phone, email, service, source, createdAt }], updatedAt }`. Les leads sont triés du plus récent au plus ancien, et les compteurs sont calculés sur la même lecture. Le mois commence à minuit heure de Paris, et chaque site figure dans `metrics`, à 0 s'il n'a reçu aucun lead.
+
+Au clic sur un bâtiment, le panneau d'inspection affiche ses leads (Date, Nom, Téléphone, Email, Service, Source) ; l'onglet « Toute la flotte » ajoute la colonne Dépôt et liste les leads de tous les sites. Le QG ouvre directement sur la flotte.
+
+Toute la liste part au navigateur à chaque actualisation : au-delà de quelques milliers de leads, il faudra paginer la route (`take`/`cursor` sur `createdAt`) et ajouter un index sur `createdAt`. Pour une lecture complète, un index n'aide pas : Postgres lit toute la table puis trie.
 
 La base est un Postgres Neon (Vercel Marketplace). Prisma 7 n'accepte plus les URL dans `prisma/schema.prisma` : la CLI se connecte via `prisma7.config.ts`, l'application via `lib/prisma.ts` (adaptateur `@prisma/adapter-pg`).
 
@@ -56,6 +60,28 @@ curl -X POST https://<hub>/api/leads/inbound \
 ```
 
 `siteId` doit être un ID de `lib/mock-data.json`. `name`, `phone`, `service` et `source` sont requis, `email` est facultatif. Réponses : 201 `{ id, createdAt }`, 401 clé invalide, 422 lead invalide (`details` liste les erreurs).
+
+## Accès admin
+
+Tout le Hub (dashboard, `/api/fleet`, `/api/leads`) exige une session admin, sauf `/login` et `/api/leads/inbound`, protégée par `HUB_SECRET_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
+
+`/login` compare le mot de passe à `ADMIN_PASSWORD`, puis pose le cookie HttpOnly `securium_admin_session`, valable 7 jours et signé HMAC-SHA256 avec `SESSION_SECRET` (`lib/session.ts`) : un cookie modifié, expiré ou signé avec une autre clé est refusé. Changer `SESSION_SECRET` déconnecte toutes les sessions.
+
+| Variable (`.env` et projet Vercel) | Rôle |
+| --- | --- |
+| `ADMIN_PASSWORD` | Mot de passe de `/login` |
+| `SESSION_SECRET` | Clé de signature des sessions, 32 caractères minimum ; sans elle, toute connexion est refusée |
+
+Générer `SESSION_SECRET` : `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
+
+## Télémétrie des agents
+
+`GET /api/telemetry` renvoie l'état des agents de Securium-OS, affiché dans le panneau « Agents » à gauche, actualisé toutes les 10 s :
+
+- **Statut** : un agent est actif quand son script (`scripts/run-cfo.sh`, `run-devops.sh`, `run-prospector.sh`, `run-seo.sh`, `simulate-market.sh`, `sec-orchestrator.sh`) tourne dans un `bash.exe` du poste. La liste vient de PowerShell (`Get-CimInstance Win32_Process`), soit environ 1 s par appel ; le résultat est gardé 5 s. Un agent arrêté dont la dernière ligne est une erreur passe en « Erreur ».
+- **Journal** : les 64 derniers Ko de `Securium-OS/logs/agent-activity.log` donnent la dernière action de chaque agent et les 40 lignes les plus récentes. Les lignes ne sont pas horodatées : seule la date de dernière écriture du fichier est affichée. Autre chemin : `AGENT_LOG_PATH`.
+
+Cette télémétrie n'existe que si le Hub tourne sur le poste (`npm run dev` ou `npm start` dans `C:\Securium-Workspace\securium-hub`). Sur Vercel, ni le journal ni les processus du poste ne sont lisibles : le panneau l'indique. Pour l'avoir en production, les agents devront pousser leurs événements vers le Hub, comme les satellites poussent leurs leads.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

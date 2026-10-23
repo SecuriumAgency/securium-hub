@@ -1,15 +1,12 @@
 "use client";
 
-import { useRef, type ReactNode, type Ref, type RefObject } from "react";
-import { Html } from "@react-three/drei";
-import { MathUtils, Vector3, type Camera, type Object3D } from "three";
-import { Building2, CalendarDays, Crosshair, Crown, Users, X } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Building2, CalendarDays, Crosshair, Crown, Globe2, Users, X } from "lucide-react";
 import { formatNumber, type Site, type SiteStatus } from "@/lib/sites";
 import { useLeads } from "@/lib/use-leads";
-import { siteHeight } from "./models";
+import { LeadsTable } from "./LeadsTable";
 
-const VIEWPORT_MARGIN = 12;
-const anchorWorld = new Vector3();
+type Scope = "site" | "fleet";
 
 const statusBadge: Record<SiteStatus, { label: string; badge: string; dot: string }> = {
   online: { label: "En ligne", badge: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300", dot: "bg-emerald-400" },
@@ -20,112 +17,139 @@ const statusBadge: Record<SiteStatus, { label: string; badge: string; dot: strin
 type SitePanelProps = {
   site?: Site;
   onClose: () => void;
-  portal: RefObject<HTMLElement>;
 };
 
-// Toujours monté, même sans sélection : drei démonte la racine React de <Html> de façon
-// synchrone, on évite donc de le faire depuis le bouton Fermer situé dans cette racine.
-export function SitePanel({ site, onClose, portal }: SitePanelProps) {
-  const card = useRef<HTMLDivElement>(null);
-  const anchor: [number, number, number] = site
-    ? [site.coords[0], siteHeight(site) + 0.6, site.coords[2]]
-    : [0, 0, 0];
-
-  // Le panneau est posé au-dessus du bâtiment (bas-centre sur l'ancre), mais borné à l'écran :
-  // sans ça, celui du QG sort par le haut et son bouton Fermer devient inaccessible.
-  const keepInViewport = (object: Object3D, camera: Camera, size: { width: number; height: number }) => {
-    anchorWorld.setFromMatrixPosition(object.matrixWorld).project(camera);
-    const x = (anchorWorld.x * 0.5 + 0.5) * size.width;
-    const y = (-anchorWorld.y * 0.5 + 0.5) * size.height;
-    const halfWidth = (card.current?.offsetWidth ?? 0) / 2;
-    const height = card.current?.offsetHeight ?? 0;
-    return [
-      MathUtils.clamp(x, halfWidth + VIEWPORT_MARGIN, size.width - halfWidth - VIEWPORT_MARGIN),
-      MathUtils.clamp(y, height + VIEWPORT_MARGIN, size.height - VIEWPORT_MARGIN),
-    ];
-  };
-
-  return (
-    <Html position={anchor} portal={portal} zIndexRange={[100, 50]} calculatePosition={keepInViewport}>
-      {site && <PanelCard ref={card} site={site} onClose={onClose} />}
-    </Html>
-  );
+// Panneau d'inspection, posé à droite par-dessus la scène, hors du <Canvas>.
+export function SitePanel({ site, onClose }: SitePanelProps) {
+  if (!site) return null;
+  // key : chaque bâtiment rouvre le panneau sur sa vue par défaut.
+  return <PanelCard key={site.id} site={site} onClose={onClose} />;
 }
 
-function PanelCard({ site, onClose, ref }: { site: Site; onClose: () => void; ref: Ref<HTMLDivElement> }) {
-  // Abonné au store des leads : seule cette carte se re-rend à chaque rafraîchissement.
-  const metrics = useLeads()?.metrics[site.id];
-  const [x, y, z] = site.coords;
-  const online = site.status === "online";
-  const status = statusBadge[site.status];
+function PanelCard({ site, onClose }: { site: Site; onClose: () => void }) {
+  // Abonné au store des leads : seul ce panneau (et le HUD) se re-rend à chaque actualisation.
+  const { data, failed } = useLeads();
   const isHq = site.kind === "hq";
+  // Le QG ouvre sur toute la flotte, un satellite sur ses propres leads.
+  const [scope, setScope] = useState<Scope>(isHq ? "fleet" : "site");
+  const siteLeads = useMemo(() => data?.leads.filter((lead) => lead.siteId === site.id), [data, site.id]);
+  const leads = scope === "fleet" ? data?.leads : siteLeads;
+  const metrics = data?.metrics[site.id];
+  const status = statusBadge[site.status];
+  const [x, y, z] = site.coords;
 
   return (
-    <div ref={ref} className="-translate-x-1/2 -translate-y-full pb-4">
-      <section
-        aria-label={`Statistiques de ${site.name}`}
-        className="relative w-72 rounded-2xl border border-white/15 bg-slate-900/45 p-4 text-slate-100 shadow-2xl shadow-black/60 backdrop-blur-xl"
-      >
-        <header className="flex items-start gap-3">
-          <div
-            className={`grid size-10 shrink-0 place-items-center rounded-xl border ${
-              isHq
-                ? "border-amber-300/30 bg-amber-400/15 text-amber-300"
-                : "border-cyan-300/30 bg-cyan-400/10 text-cyan-300"
-            }`}
-          >
-            {isHq ? <Crown aria-hidden className="size-5" /> : <Building2 aria-hidden className="size-5" />}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{site.sector}</p>
-            <h2 className="truncate text-base font-semibold text-white">{site.name}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer le panneau"
-            className="cursor-pointer rounded-lg p-1 text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-          >
-            <X aria-hidden className="size-4" />
-          </button>
-        </header>
-
+    <aside
+      aria-label={`Inspection de ${site.name}`}
+      className="absolute inset-x-4 top-24 bottom-12 z-50 flex flex-col rounded-2xl border border-white/15 bg-slate-900/75 p-4 text-slate-100 shadow-2xl shadow-black/60 backdrop-blur-xl sm:top-28 sm:right-6 sm:left-auto sm:w-[calc(100vw-3rem)] sm:p-5 lg:w-[min(68rem,calc(100vw-23rem))]"
+    >
+      <header className="flex items-start gap-3">
         <div
-          className={`mt-3 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium ${status.badge}`}
+          className={`grid size-10 shrink-0 place-items-center rounded-xl border ${
+            isHq
+              ? "border-amber-300/30 bg-amber-400/15 text-amber-300"
+              : "border-cyan-300/30 bg-cyan-400/10 text-cyan-300"
+          }`}
         >
+          {isHq ? <Crown aria-hidden className="size-5" /> : <Building2 aria-hidden className="size-5" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{site.sector}</p>
+          <h2 className="truncate text-base font-semibold text-white">{site.name}</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer le panneau"
+          className="cursor-pointer rounded-lg p-1 text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+        >
+          <X aria-hidden className="size-4" />
+        </button>
+      </header>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium ${status.badge}`}>
           <span className="relative flex size-2">
-            {online && (
+            {site.status === "online" && (
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
             )}
             <span className={`relative inline-flex size-2 rounded-full ${status.dot}`} />
           </span>
           {status.label}
         </div>
+        <span className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
+          <Crosshair aria-hidden className="size-3" />x {x} · y {y} · z {z}
+        </span>
+      </div>
 
-        <dl className="mt-4 grid grid-cols-2 gap-2">
-          <Stat
-            icon={<CalendarDays aria-hidden className="size-3.5" />}
-            label="Leads (mois)"
-            value={metrics ? formatNumber(metrics.leadsThisMonth) : "—"}
-          />
-          <Stat
-            icon={<Users aria-hidden className="size-3.5" />}
-            label="Leads (total)"
-            value={metrics ? formatNumber(metrics.leadsTotal) : "—"}
-          />
-        </dl>
-
-        <footer className="mt-3 flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
-          <Crosshair aria-hidden className="size-3" />
-          x {x} · y {y} · z {z}
-        </footer>
-
-        <div
-          aria-hidden
-          className="absolute -bottom-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-r border-b border-white/15 bg-slate-900/45"
+      <dl className="mt-4 grid grid-cols-2 gap-2">
+        <Stat
+          icon={<CalendarDays aria-hidden className="size-3.5" />}
+          label="Leads (mois)"
+          value={metrics ? formatNumber(metrics.leadsThisMonth) : "—"}
         />
-      </section>
-    </div>
+        <Stat
+          icon={<Users aria-hidden className="size-3.5" />}
+          label="Leads (total)"
+          value={metrics ? formatNumber(metrics.leadsTotal) : "—"}
+        />
+      </dl>
+
+      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div role="group" aria-label="Périmètre des leads" className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+          <ScopeButton active={scope === "site"} onClick={() => setScope("site")} count={siteLeads?.length}>
+            {isHq ? <Crown aria-hidden className="size-3.5" /> : <Building2 aria-hidden className="size-3.5" />}
+            {isHq ? "QG" : "Ce dépôt"}
+          </ScopeButton>
+          <ScopeButton active={scope === "fleet"} onClick={() => setScope("fleet")} count={data?.leads.length}>
+            <Globe2 aria-hidden className="size-3.5" />
+            Toute la flotte
+          </ScopeButton>
+        </div>
+        <p className="text-[11px] text-slate-500">
+          {failed && data ? (
+            <span className="text-amber-300">Actualisation en échec · dernières données connues</span>
+          ) : (
+            "Heure de Paris · actualisé toutes les 20 s"
+          )}
+        </p>
+      </div>
+
+      <LeadsTable
+        leads={leads}
+        failed={failed}
+        showSite={scope === "fleet"}
+        caption={scope === "fleet" ? "Leads de toute la flotte" : `Leads de ${site.name}`}
+      />
+    </aside>
+  );
+}
+
+function ScopeButton({
+  active,
+  onClick,
+  count,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  count?: number;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-cyan-400 ${
+        active ? "bg-cyan-400/15 text-cyan-200" : "text-slate-400 hover:text-white"
+      }`}
+    >
+      {children}
+      <span className="rounded-md bg-white/10 px-1.5 text-[10px] tabular-nums text-slate-300">
+        {count === undefined ? "…" : formatNumber(count)}
+      </span>
+    </button>
   );
 }
 

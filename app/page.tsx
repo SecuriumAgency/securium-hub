@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, OrthographicCamera } from "@react-three/drei";
+import { AgentsPanel } from "@/components/hub/AgentsPanel";
 import { FleetHud } from "@/components/hub/FleetHud";
 import { Ground } from "@/components/hub/Ground";
 import { NetworkLinks } from "@/components/hub/NetworkLinks";
@@ -91,10 +92,11 @@ export default function Home() {
             portal={overlay}
           />
         ))}
-        <SitePanel site={selectedSite} onClose={() => setSelectedId(null)} portal={overlay} />
       </Canvas>
 
       <FleetHud sites={sites} />
+      <AgentsPanel />
+      <SitePanel site={selectedSite} onClose={() => setSelectedId(null)} />
     </main>
   );
 }
