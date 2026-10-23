@@ -4,6 +4,9 @@ import { parseOutreachBatch } from "@/lib/outreach";
 import { prisma } from "@/lib/prisma";
 
 const MAX_BODY_CHARS = 1024 * 1024;
+// Un aller-retour vers la base par prospect, en série : depuis Vercel, 128 upserts dépassent le délai
+// par défaut de Prisma (5 s) et la transaction expire. 90 s couvrent un lot plein (500 prospects).
+const TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 90_000 };
 
 // Synchronisation des prospects démarchés, appelée par scripts/migrate-outreach.mts.
 // Header attendu : `Authorization: Bearer <HUB_SECRET_KEY>`.
@@ -41,10 +44,10 @@ export async function POST(request: NextRequest) {
     // Seulement pour compter créations et mises à jour : upsert ne dit pas lequel des deux il a fait.
     const existing = await prisma.outreachProspect.count({ where: { email: { in: prospects.map((prospect) => prospect.email) } } });
     // Une seule transaction : si une écriture échoue, rien n'est appliqué, purge comprise.
-    const [purge] = await prisma.$transaction([
-      prisma.outreachProspect.deleteMany({ where: { email: { in: unsubscribedEmails } } }),
-      ...prospects.map((prospect) =>
-        prisma.outreachProspect.upsert({
+    const purged = await prisma.$transaction(async (tx) => {
+      const { count } = await tx.outreachProspect.deleteMany({ where: { email: { in: unsubscribedEmails } } });
+      for (const prospect of prospects) {
+        await tx.outreachProspect.upsert({
           where: { email: prospect.email },
           create: prospect,
           // createdAt (premier contact) et company restent ceux du premier import.
@@ -54,14 +57,15 @@ export async function POST(request: NextRequest) {
             phone: prospect.phone,
             source: prospect.source,
           },
-        }),
-      ),
-    ]);
+        });
+      }
+      return count;
+    }, TRANSACTION_OPTIONS);
     return NextResponse.json({
       received: prospects.length,
       created: prospects.length - existing,
       updated: existing,
-      purged: purge.count,
+      purged,
     });
   } catch (error) {
     console.error("[outreach] synchronisation impossible :", error);
