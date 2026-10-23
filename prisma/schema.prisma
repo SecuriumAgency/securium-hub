@@ -27,9 +27,10 @@ model Lead {
   @@index([siteId, createdAt])
 }
 
-// Prospect démarché par e-mail (securium-prospector), importé par scripts/migrate-outreach.mts
+// Prospect démarché par e-mail (securium-prospector), synchronisé par scripts/migrate-outreach.mts
 // via POST /api/outreach/import. Distinct des leads entrants : absent des métriques des sites,
-// jamais notifié sur Discord. Les désinscrits ne sont jamais importés (RGPD).
+// jamais notifié sur Discord. Les désinscrits ne sont jamais importés, et sont supprimés s'ils se
+// désinscrivent après coup (RGPD).
 model OutreachProspect {
   id            String   @id @default(cuid())
   company       String

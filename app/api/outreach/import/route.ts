@@ -5,9 +5,11 @@ import { prisma } from "@/lib/prisma";
 
 const MAX_BODY_CHARS = 1024 * 1024;
 
-// Import en masse des prospects démarchés, appelé par scripts/migrate-outreach.mts.
-// Header attendu : `Authorization: Bearer <HUB_SECRET_KEY>`. Corps : tableau de prospects.
-// Route silencieuse : un prospect n'est pas un lead, aucune notification ne part (ni Discord, ni autre).
+// Synchronisation des prospects démarchés, appelée par scripts/migrate-outreach.mts.
+// Header attendu : `Authorization: Bearer <HUB_SECRET_KEY>`.
+// Corps : { prospects: [...], unsubscribedEmails: [...] }. Les désinscrits sont purgés, les prospects
+// créés ou mis à jour par adresse. Route silencieuse : un prospect n'est pas un lead, aucune
+// notification ne part (ni Discord, ni autre).
 export async function POST(request: NextRequest) {
   const secret = process.env.HUB_SECRET_KEY;
   if (!secret) {
@@ -33,14 +35,36 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) {
     return NextResponse.json({ error: "Lot invalide.", details: parsed.errors }, { status: 422 });
   }
+  const { prospects, unsubscribedEmails } = parsed;
 
   try {
-    // Adresse déjà présente (contrainte unique sur email) : ignorée, un réimport n'écrase rien.
-    const { count } = await prisma.outreachProspect.createMany({ data: parsed.prospects, skipDuplicates: true });
-    const received = parsed.prospects.length;
-    return NextResponse.json({ received, inserted: count, skipped: received - count }, { status: 201 });
+    // Seulement pour compter créations et mises à jour : upsert ne dit pas lequel des deux il a fait.
+    const existing = await prisma.outreachProspect.count({ where: { email: { in: prospects.map((prospect) => prospect.email) } } });
+    // Une seule transaction : si une écriture échoue, rien n'est appliqué, purge comprise.
+    const [purge] = await prisma.$transaction([
+      prisma.outreachProspect.deleteMany({ where: { email: { in: unsubscribedEmails } } }),
+      ...prospects.map((prospect) =>
+        prisma.outreachProspect.upsert({
+          where: { email: prospect.email },
+          create: prospect,
+          // createdAt (premier contact) et company restent ceux du premier import.
+          update: {
+            status: prospect.status,
+            lastContactAt: prospect.lastContactAt,
+            phone: prospect.phone,
+            source: prospect.source,
+          },
+        }),
+      ),
+    ]);
+    return NextResponse.json({
+      received: prospects.length,
+      created: prospects.length - existing,
+      updated: existing,
+      purged: purge.count,
+    });
   } catch (error) {
-    console.error("[outreach] import impossible :", error);
+    console.error("[outreach] synchronisation impossible :", error);
     return NextResponse.json({ error: "Enregistrement du lot impossible." }, { status: 500 });
   }
 }

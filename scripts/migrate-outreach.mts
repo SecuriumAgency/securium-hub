@@ -1,8 +1,8 @@
 /*
- * Migration de l'historique de prospection (securium-prospector) vers le Hub.
+ * Synchronisation de la prospection (securium-prospector) vers le Hub, à relancer autant que voulu.
  *
- *   node scripts/migrate-outreach.mts            essai à blanc : compte les prospects prêts, n'envoie rien
- *   node scripts/migrate-outreach.mts --send     envoie les prospects à POST /api/outreach/import
+ *   node scripts/migrate-outreach.mts            essai à blanc : compte prospects et désinscrits, n'envoie rien
+ *   node scripts/migrate-outreach.mts --send     envoie le tout à POST /api/outreach/import
  *
  * Options : --data=<dossier> (prospects.csv et blocklist.json, par défaut le dossier data/ de
  * securium-prospector), --hub=<url> (par défaut https://hub.securium-agency.fr ; HTTP accepté vers la
@@ -10,10 +10,12 @@
  *
  * Le registre prospects.csv journalise des actions (envoi, relance…) : plusieurs lignes par
  * prospect. Le script les regroupe par adresse : premier contact (createdAt), dernière action
- * (lastContactAt), dernier statut, entreprise et téléphone les plus récents.
+ * (lastContactAt), dernier statut, entreprise et téléphone les plus récents. Le Hub crée les
+ * nouveaux prospects et met à jour les autres (statut, dernier contact, téléphone, source).
  *
  * RGPD : un prospect désinscrit (statut Desinscrit sur une de ses lignes, ou adresse dans
- * blocklist.json) est écarté en entier, toutes ses lignes comprises. Les lignes Simulation (essais à
+ * blocklist.json) n'est jamais envoyé comme prospect ; son adresse part dans unsubscribedEmails, et
+ * le Hub le supprime s'il l'avait importé avant sa désinscription. Les lignes Simulation (essais à
  * blanc du prospecteur, sans contact réel) sont écartées une à une. Seuls l'entreprise, l'adresse,
  * le téléphone, le statut et les dates sont transmis. Sans blocklist lisible, rien ne part.
  *
@@ -24,11 +26,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   isExcludedStatus,
+  isValidEmail,
   MAX_BATCH,
+  MAX_UNSUBSCRIBED,
   normalizeEmail,
   normalizeStatus,
   parseIsoDate,
   parseOutreachBatch,
+  type OutreachBatchInput,
   type OutreachProspectInput,
 } from "../lib/outreach.ts";
 
@@ -38,7 +43,8 @@ const DEFAULT_HUB = "https://hub.securium-agency.fr";
 const SOURCE = "securium-prospector";
 const REQUIRED_COLUMNS = ["Date", "Entreprise", "Email", "Telephone", "Statut"] as const;
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const TIMEOUT_MS = 30_000;
+// Un upsert par prospect, en série dans une transaction : un lot de 500 peut prendre plus d'une minute.
+const TIMEOUT_MS = 120_000;
 
 const option = (name: string) => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
 const send = process.argv.includes("--send");
@@ -129,8 +135,10 @@ const rows: Row[] = cells.map((line) => ({
   status: (line[columns.Statut] ?? "").trim(),
 }));
 
-// Désinscrits : adresse en blocklist, ou au moins une ligne Desinscrit. Écartés en entier.
+// Désinscrits : adresse en blocklist, ou au moins une ligne Desinscrit. Écartés en entier, et purgés
+// du Hub. Une entrée qui n'est pas une adresse valide ne peut correspondre à aucun prospect : ignorée.
 const optedOut = new Set([...blocklist, ...rows.filter((row) => normalizeStatus(row.status) === "desinscrit").map((row) => row.email)]);
+const unsubscribedEmails = [...optedOut].filter(isValidEmail);
 
 const stats = { rows: rows.length, optedOutRows: 0, simulationRows: 0, invalidRows: 0 };
 const byEmail = new Map<string, Row[]>();
@@ -155,9 +163,13 @@ const prospects: OutreachProspectInput[] = [...byEmail].map(([email, history]) =
   };
 });
 
+// Lot i : i-ème tranche de prospects et i-ème tranche d'adresses à purger (souvent un seul lot).
 // Même validation que la route, lot par lot : ce qui passe ici sera accepté par le Hub.
-const batches: OutreachProspectInput[][] = [];
-for (let i = 0; i < prospects.length; i += MAX_BATCH) batches.push(prospects.slice(i, i + MAX_BATCH));
+const batchCount = Math.max(Math.ceil(prospects.length / MAX_BATCH), Math.ceil(unsubscribedEmails.length / MAX_UNSUBSCRIBED));
+const batches: OutreachBatchInput[] = Array.from({ length: batchCount }, (_, index) => ({
+  prospects: prospects.slice(index * MAX_BATCH, (index + 1) * MAX_BATCH),
+  unsubscribedEmails: unsubscribedEmails.slice(index * MAX_UNSUBSCRIBED, (index + 1) * MAX_UNSUBSCRIBED),
+}));
 for (const [index, batch] of batches.entries()) {
   const checked = parseOutreachBatch(batch);
   if (!checked.ok) fail(`lot ${index + 1} refusé par la validation de la route :\n  ${checked.errors.join("\n  ")}`);
@@ -170,16 +182,22 @@ console.log(`  lignes lues                               : ${stats.rows}`);
 console.log(`  lignes de prospects désinscrits écartées  : ${stats.optedOutRows} (${optedOut.size - ignoredBlocklisted} adresse(s) concernée(s) ; blocklist : ${blocklist.size})`);
 console.log(`  lignes Simulation écartées                : ${stats.simulationRows}`);
 console.log(`  lignes incomplètes écartées               : ${stats.invalidRows}`);
-console.log(`Prospects prêts à importer                  : ${prospects.length}, en ${batches.length} lot(s), validés par les règles de la route`);
+console.log(`Prospects à créer ou mettre à jour          : ${prospects.length}`);
 console.log(`  par dernier statut : ${Object.entries(statuses).map(([status, count]) => `${status} ${count}`).join(", ")}`);
 if (prospects.length > 0) {
   const first = prospects.reduce((min, prospect) => (prospect.createdAt < min ? prospect.createdAt : min), prospects[0].createdAt);
   const last = prospects.reduce((max, prospect) => (prospect.lastContactAt > max ? prospect.lastContactAt : max), prospects[0].lastContactAt);
   console.log(`  période : ${first} → ${last}`);
 }
+console.log(`Adresses désinscrites à purger du Hub        : ${unsubscribedEmails.length} (blocklist et lignes Desinscrit${optedOut.size > unsubscribedEmails.length ? `, ${optedOut.size - unsubscribedEmails.length} entrée(s) invalide(s) ignorée(s)` : ""})`);
+console.log(`Envoi en ${batches.length} lot(s), validés par les règles de la route`);
 
+if (batches.length === 0) {
+  console.log("Rien à envoyer.");
+  process.exit(0);
+}
 if (!send) {
-  console.log("Essai à blanc : rien n'a été envoyé. Relancer avec --send pour importer.");
+  console.log("Essai à blanc : rien n'a été envoyé. Relancer avec --send pour synchroniser.");
   process.exit(0);
 }
 
@@ -202,8 +220,7 @@ if (url.protocol !== "https:" && !(url.protocol === "http:" && LOCAL_HOSTNAMES.h
   fail(`HTTPS requis hors de la machine locale (${url.href}).`);
 }
 
-let inserted = 0;
-let skipped = 0;
+const totals = { created: 0, updated: 0, purged: 0 };
 for (const [index, batch] of batches.entries()) {
   const response = await fetch(url, {
     method: "POST",
@@ -212,12 +229,16 @@ for (const [index, batch] of batches.entries()) {
     redirect: "manual",
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  const body = (await response.json().catch(() => null)) as { inserted?: number; skipped?: number; error?: string; details?: string[] } | null;
-  if (response.status !== 201) {
+  const body = (await response.json().catch(() => null)) as
+    | { created?: number; updated?: number; purged?: number; error?: string; details?: string[] }
+    | null;
+  if (response.status !== 200) {
     fail(`lot ${index + 1}/${batches.length} refusé, HTTP ${response.status} ${body?.error ?? ""}${body?.details ? `\n  ${body.details.join("\n  ")}` : ""}`);
   }
-  inserted += body?.inserted ?? 0;
-  skipped += body?.skipped ?? 0;
-  console.log(`lot ${index + 1}/${batches.length} : ${body?.inserted ?? 0} importé(s), ${body?.skipped ?? 0} déjà présent(s)`);
+  const result = { created: body?.created ?? 0, updated: body?.updated ?? 0, purged: body?.purged ?? 0 };
+  totals.created += result.created;
+  totals.updated += result.updated;
+  totals.purged += result.purged;
+  console.log(`lot ${index + 1}/${batches.length} : ${result.created} créé(s), ${result.updated} mis à jour, ${result.purged} purgé(s)`);
 }
-console.log(`Import terminé vers ${url.origin} : ${inserted} prospect(s) importé(s), ${skipped} déjà présent(s).`);
+console.log(`Synchronisation terminée vers ${url.origin} : ${totals.created} créé(s), ${totals.updated} mis à jour, ${totals.purged} désinscrit(s) purgé(s).`);

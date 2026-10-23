@@ -1,8 +1,8 @@
-// Prospection sortante : prospects démarchés par securium-prospector, importés dans le Hub par
+// Prospection sortante : prospects démarchés par securium-prospector, synchronisés dans le Hub par
 // scripts/migrate-outreach.mts (POST /api/outreach/import) et affichés sur /admin/outreach.
-// Aucun import : le script d'import, exécuté par Node sans bundler, réutilise ces règles telles quelles.
+// Aucun import : le script de synchronisation, exécuté par Node sans bundler, réutilise ces règles telles quelles.
 
-// Prospect tel que l'envoie le script d'import, dates en ISO.
+// Prospect tel que l'envoie le script, dates en ISO.
 export type OutreachProspectInput = {
   company: string;
   email: string;
@@ -13,14 +13,23 @@ export type OutreachProspectInput = {
   lastContactAt: string;
 };
 
-// Prospect validé, prêt pour prisma.outreachProspect.createMany.
+// Corps de POST /api/outreach/import : prospects à créer ou mettre à jour, et adresses désinscrites
+// à purger du Hub.
+export type OutreachBatchInput = {
+  prospects: OutreachProspectInput[];
+  unsubscribedEmails: string[];
+};
+
+// Prospect validé, prêt pour prisma.outreachProspect.upsert.
 export type OutreachProspectRecord = Omit<OutreachProspectInput, "createdAt" | "lastContactAt"> & {
   createdAt: Date;
   lastContactAt: Date;
 };
 
-// Au plus 500 prospects par requête : le corps reste loin de la limite de 4,5 Mo de Vercel.
+// Par requête : au plus 500 prospects (un upsert chacun, dans une seule transaction) et 5 000
+// adresses à purger. Le corps reste loin de la limite de 4,5 Mo de Vercel.
 export const MAX_BATCH = 500;
+export const MAX_UNSUBSCRIBED = 5000;
 
 const MAX_LENGTH = { company: 200, email: 254, phone: 40, status: 40, source: 60 } as const;
 const MAX_ERRORS = 20;
@@ -46,6 +55,11 @@ export function normalizeEmail(email: string) {
   return lowered.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}/)?.[0] ?? lowered;
 }
 
+// Adresse déjà normalisée.
+export function isValidEmail(email: string) {
+  return EMAIL.test(email) && email.length <= MAX_LENGTH.email;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -59,22 +73,38 @@ export function parseIsoDate(value: unknown) {
   return Number.isNaN(time) ? null : new Date(time);
 }
 
-// Corps de POST /api/outreach/import : tableau de 1 à MAX_BATCH prospects. Tout ou rien : une
-// seule entrée invalide fait rejeter le lot, pour qu'un import ne soit jamais partiel en silence.
+// Tout ou rien : une seule entrée invalide fait rejeter le lot, pour qu'une synchronisation ne soit
+// jamais partielle en silence. Une adresse ne peut pas être à la fois à créer et à purger.
 export function parseOutreachBatch(
   body: unknown,
-): { ok: true; prospects: OutreachProspectRecord[] } | { ok: false; errors: string[] } {
-  if (!Array.isArray(body)) return { ok: false, errors: ["Le corps doit être un tableau de prospects."] };
-  if (body.length === 0 || body.length > MAX_BATCH) {
-    return { ok: false, errors: [`Le lot doit contenir de 1 à ${MAX_BATCH} prospects (reçu : ${body.length}).`] };
+): { ok: true; prospects: OutreachProspectRecord[]; unsubscribedEmails: string[] } | { ok: false; errors: string[] } {
+  if (!isRecord(body) || !Array.isArray(body.prospects) || !Array.isArray(body.unsubscribedEmails)) {
+    return { ok: false, errors: ["Le corps doit être un objet { prospects: [...], unsubscribedEmails: [...] }."] };
+  }
+  const { prospects: rawProspects, unsubscribedEmails: rawUnsubscribed } = body;
+  if (rawProspects.length > MAX_BATCH) {
+    return { ok: false, errors: [`prospects : au plus ${MAX_BATCH} par lot (reçu : ${rawProspects.length}).`] };
+  }
+  if (rawUnsubscribed.length > MAX_UNSUBSCRIBED) {
+    return { ok: false, errors: [`unsubscribedEmails : au plus ${MAX_UNSUBSCRIBED} par lot (reçu : ${rawUnsubscribed.length}).`] };
+  }
+  if (rawProspects.length === 0 && rawUnsubscribed.length === 0) {
+    return { ok: false, errors: ["Lot vide : aucun prospect ni aucune adresse à purger."] };
   }
 
   const errors: string[] = [];
+
+  const unsubscribed = new Set<string>();
+  rawUnsubscribed.forEach((value, index) => {
+    const email = typeof value === "string" ? normalizeEmail(value) : "";
+    if (!email || !isValidEmail(email)) errors.push(`unsubscribedEmails[${index}] invalide.`);
+    else unsubscribed.add(email);
+  });
+
   const seen = new Set<string>();
   const prospects: OutreachProspectRecord[] = [];
-
-  body.forEach((item, index) => {
-    const at = `[${index}]`;
+  rawProspects.forEach((item, index) => {
+    const at = `prospects[${index}]`;
     const before = errors.length;
     if (!isRecord(item)) {
       errors.push(`${at} doit être un objet.`);
@@ -94,8 +124,9 @@ export function parseOutreachBatch(
     if (status && isExcludedStatus(status)) errors.push(`${at}.status « ${status} » n'est jamais importé (désinscription ou simulation).`);
 
     const email = typeof item.email === "string" ? normalizeEmail(item.email) : "";
-    if (!email || !EMAIL.test(email) || email.length > MAX_LENGTH.email) errors.push(`${at}.email invalide.`);
+    if (!email || !isValidEmail(email)) errors.push(`${at}.email invalide.`);
     else if (seen.has(email)) errors.push(`${at}.email en double dans le lot.`);
+    else if (unsubscribed.has(email)) errors.push(`${at}.email figure aussi dans unsubscribedEmails.`);
     seen.add(email);
 
     const rawPhone = typeof item.phone === "string" ? item.phone.trim() : "";
@@ -118,5 +149,5 @@ export function parseOutreachBatch(
     if (errors.length > MAX_ERRORS) shown.push(`… et ${errors.length - MAX_ERRORS} autre(s) erreur(s).`);
     return { ok: false, errors: shown };
   }
-  return { ok: true, prospects };
+  return { ok: true, prospects, unsubscribedEmails: [...unsubscribed] };
 }
