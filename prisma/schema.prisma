@@ -26,3 +26,26 @@ model Lead {
   // Comptages par site et par période (GET /api/leads).
   @@index([siteId, createdAt])
 }
+
+// Prospect démarché par e-mail (securium-prospector), importé par scripts/migrate-outreach.mts
+// via POST /api/outreach/import. Distinct des leads entrants : absent des métriques des sites,
+// jamais notifié sur Discord. Les désinscrits ne sont jamais importés (RGPD).
+model OutreachProspect {
+  id            String   @id @default(cuid())
+  company       String
+  // Adresse normalisée (minuscules) : un prospect par adresse, un réimport ne crée aucun doublon.
+  email         String   @unique
+  phone         String?
+  // Dernier statut du registre de prospection : Envoye, Relance_1…
+  status        String
+  // Outil d'origine, ex. "securium-prospector".
+  source        String
+  // Premier contact, repris du registre : pas de valeur par défaut, l'historique fait foi.
+  createdAt     DateTime
+  // Dernière action du registre, relance comprise.
+  lastContactAt DateTime
+  // Entrée dans le Hub, pour la traçabilité.
+  importedAt    DateTime @default(now())
+
+  @@index([createdAt])
+}

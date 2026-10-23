@@ -61,9 +61,19 @@ curl -X POST https://<hub>/api/leads/inbound \
 
 `siteId` doit être un ID de `lib/mock-data.json`. `name`, `phone`, `service` et `source` sont requis, `email` est facultatif. Réponses : 201 `{ id, createdAt }`, 401 clé invalide, 422 lead invalide (`details` liste les erreurs).
 
+## Prospection (outreach)
+
+Les prospects démarchés par e-mail par `securium-prospector` vivent dans la table `OutreachProspect`, à part des leads entrants : ils n'entrent pas dans les métriques des sites et ne sont jamais notifiés sur Discord. Le panneau `/admin/outreach`, derrière la session admin, les liste du dernier contact au plus récent, avec le nombre de prospects par statut.
+
+`scripts/migrate-outreach.mts` importe le registre `data/prospects.csv` du prospecteur. Lancé sans option, il fait un essai à blanc : il compte les prospects prêts et n'envoie rien. Avec `--send`, il les envoie à `POST /api/outreach/import`. Options : `--data=<dossier>` (`prospects.csv` et `blocklist.json`), `--hub=<url>` (par défaut la production ; HTTP accepté vers la machine locale seulement).
+
+- **Regroupement** : le registre journalise des actions (envoi, relance), avec plusieurs lignes par prospect. Le script garde un prospect par adresse : premier contact (`createdAt`), dernière action (`lastContactAt`), dernier statut.
+- **RGPD** : un prospect désinscrit (une ligne `Desinscrit`, ou adresse dans `blocklist.json`) est écarté en entier. Les lignes `Simulation` (essais à blanc du prospecteur) sont écartées une à une. Sans blocklist lisible, le script s'arrête. Seuls l'entreprise, l'adresse, le téléphone, le statut et les dates sont transmis.
+- **Route** : `Authorization: Bearer <HUB_SECRET_KEY>`, corps = tableau de 1 à 500 prospects `{ company, email, phone, status, source, createdAt, lastContactAt }`, dates en ISO 8601. Le lot est accepté entier ou refusé entier : 422 avec `details` si une entrée est invalide, ou si une entrée a le statut `Desinscrit` ou `Simulation`. Une adresse déjà présente est ignorée (contrainte unique) : un réimport n'écrase rien. Réponse 201 `{ received, inserted, skipped }`.
+
 ## Accès admin
 
-Tout le Hub (dashboard, `/api/fleet`, `/api/leads`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound`, protégée par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
+Tout le Hub (dashboard, `/admin/outreach`, `/api/fleet`, `/api/leads`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound` et `POST /api/outreach/import`, protégées par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
 
 `/login` compare le mot de passe à `ADMIN_PASSWORD`, puis pose le cookie HttpOnly `securium_admin_session`, valable 7 jours et signé HMAC-SHA256 avec `SESSION_SECRET` (`lib/session.ts`) : un cookie modifié, expiré ou signé avec une autre clé est refusé. Changer `SESSION_SECRET` déconnecte toutes les sessions.
 
