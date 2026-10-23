@@ -3,8 +3,9 @@
 import { useRef, type ReactNode, type Ref, type RefObject } from "react";
 import { Html } from "@react-three/drei";
 import { MathUtils, Vector3, type Camera, type Object3D } from "three";
-import { Activity, Building2, Crosshair, Crown, Users, X } from "lucide-react";
-import { formatConversion, formatNumber, type Site, type SiteStatus } from "@/lib/sites";
+import { Building2, CalendarDays, Crosshair, Crown, Users, X } from "lucide-react";
+import { formatNumber, type Site, type SiteStatus } from "@/lib/sites";
+import { useLeads } from "@/lib/use-leads";
 import { siteHeight } from "./models";
 
 const VIEWPORT_MARGIN = 12;
@@ -52,6 +53,8 @@ export function SitePanel({ site, onClose, portal }: SitePanelProps) {
 }
 
 function PanelCard({ site, onClose, ref }: { site: Site; onClose: () => void; ref: Ref<HTMLDivElement> }) {
+  // Abonné au store des leads : seule cette carte se re-rend à chaque rafraîchissement.
+  const metrics = useLeads()?.metrics[site.id];
   const [x, y, z] = site.coords;
   const online = site.status === "online";
   const status = statusBadge[site.status];
@@ -100,19 +103,17 @@ function PanelCard({ site, onClose, ref }: { site: Site; onClose: () => void; re
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-2">
-          <Stat icon={<Users aria-hidden className="size-3.5" />} label="Leads" value={formatNumber(site.leads)} />
           <Stat
-            icon={<Activity aria-hidden className="size-3.5" />}
-            label="Trafic"
-            value={formatNumber(site.traffic)}
-            unit="visites"
+            icon={<CalendarDays aria-hidden className="size-3.5" />}
+            label="Leads (mois)"
+            value={metrics ? formatNumber(metrics.leadsThisMonth) : "—"}
+          />
+          <Stat
+            icon={<Users aria-hidden className="size-3.5" />}
+            label="Leads (total)"
+            value={metrics ? formatNumber(metrics.leadsTotal) : "—"}
           />
         </dl>
-
-        <div className="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs">
-          <span className="text-slate-400">Taux de conversion</span>
-          <span className="font-semibold tabular-nums text-white">{formatConversion(site)}</span>
-        </div>
 
         <footer className="mt-3 flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
           <Crosshair aria-hidden className="size-3" />
@@ -128,17 +129,14 @@ function PanelCard({ site, onClose, ref }: { site: Site; onClose: () => void; re
   );
 }
 
-function Stat({ icon, label, value, unit }: { icon: ReactNode; label: string; value: string; unit?: string }) {
+function Stat({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
       <dt className="flex items-center gap-1.5 text-[11px] text-slate-400">
         {icon}
         {label}
       </dt>
-      <dd className="mt-1 text-xl font-semibold tabular-nums text-white">
-        {value}
-        {unit && <span className="ml-1 text-[10px] font-normal text-slate-400">{unit}</span>}
-      </dd>
+      <dd className="mt-1 text-xl font-semibold tabular-nums text-white">{value}</dd>
     </div>
   );
 }

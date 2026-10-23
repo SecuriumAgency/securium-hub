@@ -1,11 +1,16 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { Activity, Radio, Users } from "lucide-react";
+import { CalendarDays, Radio, Users } from "lucide-react";
+import type { SiteMetrics } from "@/lib/leads";
 import { formatNumber, type Site } from "@/lib/sites";
+import { useLeads } from "@/lib/use-leads";
 
 export function FleetHud({ sites }: { sites: Site[] }) {
+  const leads = useLeads();
   const onlineCount = sites.filter((site) => site.status === "online").length;
-  const totalLeads = sites.reduce((sum, site) => sum + site.leads, 0);
-  const totalTraffic = sites.reduce((sum, site) => sum + site.traffic, 0);
+  const total = (metric: keyof SiteMetrics) =>
+    leads ? formatNumber(sites.reduce((sum, site) => sum + (leads.metrics[site.id]?.[metric] ?? 0), 0)) : "—";
 
   return (
     <>
@@ -16,8 +21,8 @@ export function FleetHud({ sites }: { sites: Site[] }) {
         </div>
         <dl className="flex flex-wrap gap-2">
           <Kpi icon={<Radio aria-hidden className="size-3.5" />} label="Sites en ligne" value={`${onlineCount}/${sites.length}`} />
-          <Kpi icon={<Users aria-hidden className="size-3.5" />} label="Leads" value={formatNumber(totalLeads)} />
-          <Kpi icon={<Activity aria-hidden className="size-3.5" />} label="Trafic" value={formatNumber(totalTraffic)} />
+          <Kpi icon={<CalendarDays aria-hidden className="size-3.5" />} label="Leads (mois)" value={total("leadsThisMonth")} />
+          <Kpi icon={<Users aria-hidden className="size-3.5" />} label="Leads (total)" value={total("leadsTotal")} />
         </dl>
       </header>
       <p className="pointer-events-none absolute inset-x-0 bottom-0 p-4 text-center text-xs text-slate-500">

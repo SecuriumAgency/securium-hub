@@ -4,7 +4,6 @@
     "name": "QG Securium Agency",
     "kind": "hq",
     "sector": "Quartier général",
-    "leads": 342,
     "traffic": 48210,
     "coords": [0, 0, 0]
   },
@@ -14,7 +13,6 @@
     "kind": "site",
     "sector": "R&D et produits",
     "vercelProject": "prj_P4i9Ar09b8JlouXPowpY7M2Xwdfc",
-    "leads": 87,
     "traffic": 12450,
     "coords": [-6, 0, 1]
   },
@@ -24,7 +22,6 @@
     "kind": "site",
     "sector": "Dépannage local",
     "vercelProject": "prj_Fk3REZUDJZnUq0Y1CsVSN2sf8YSK",
-    "leads": 214,
     "traffic": 18930,
     "coords": [1, 0, -6]
   },
@@ -34,7 +31,6 @@
     "kind": "site",
     "sector": "Assistance Royaume-Uni",
     "vercelProject": "prj_dQCu13MAf5cFF2uNql3foQb7gCQD",
-    "leads": 156,
     "traffic": 15620,
     "coords": [0, 0, 6]
   },
@@ -44,7 +40,6 @@
     "kind": "site",
     "sector": "Rénovation énergétique",
     "vercelProject": "prj_Ss6W3tJPeChiUo2Hnq1s22W8Pwkt",
-    "leads": 63,
     "traffic": 6840,
     "coords": [6, 0, 0]
   }

@@ -6,7 +6,7 @@ import { Line } from "@react-three/drei";
 import type { Site } from "@/lib/sites";
 import { siteAccent } from "./models";
 
-const LINK_HEIGHT = 0.09;
+export const LINK_HEIGHT = 0.09;
 
 // Liaisons QG → sites : pointillés qui défilent si le site est en ligne, figés sinon
 // (rouges hors ligne, gris si le statut est inconnu).

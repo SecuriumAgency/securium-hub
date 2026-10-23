@@ -3,10 +3,17 @@
 import { memo, useRef, useState, type RefObject } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { Edges, Html, useCursor } from "@react-three/drei";
-import { MathUtils, type Group, type Mesh } from "three";
+import { MathUtils, type Group, type Mesh, type MeshBasicMaterial, type RingGeometry } from "three";
 import { Crown } from "lucide-react";
 import type { Site, SiteStatus } from "@/lib/sites";
-import { BuildingModel, HeadquartersModel, siteAccent, siteHeight } from "./models";
+import { BuildingModel, HeadquartersModel, palette, siteAccent, siteHeight } from "./models";
+
+// Onde au pied du QG : PULSE_COUNT anneaux décalés, chacun passe de 1× à (1 + PULSE_GROWTH)× son
+// rayon en PULSE_PERIOD secondes en s'estompant.
+const PULSE_COUNT = 2;
+const PULSE_PERIOD = 3.2;
+const PULSE_GROWTH = 1.3;
+const PULSE_OPACITY = 0.7;
 
 const statusDot: Record<SiteStatus, string> = {
   online: "bg-emerald-400",
@@ -27,6 +34,7 @@ export const SiteNode = memo(function SiteNode({ site, selected, onSelect, porta
   const [hovered, setHovered] = useState(false);
   const lift = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
+  const pulses = useRef<Group>(null);
   const elapsed = useRef(0);
   useCursor(hovered);
 
@@ -43,6 +51,12 @@ export const SiteNode = memo(function SiteNode({ site, selected, onSelect, porta
     if (ring.current) {
       ring.current.scale.setScalar(1 + Math.sin(elapsed.current * 3) * 0.06);
     }
+    pulses.current?.children.forEach((child, index) => {
+      const pulse = child as Mesh<RingGeometry, MeshBasicMaterial>;
+      const phase = (elapsed.current / PULSE_PERIOD + index / PULSE_COUNT) % 1;
+      pulse.scale.setScalar(1 + (1 - (1 - phase) ** 2) * PULSE_GROWTH);
+      pulse.material.opacity = PULSE_OPACITY * (1 - phase);
+    });
   });
 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
@@ -56,12 +70,23 @@ export const SiteNode = memo(function SiteNode({ site, selected, onSelect, porta
   };
 
   return (
-    <group position={site.coords}>
+    <group position={site.coords} name={site.id}>
       <mesh position={[0, 0.04, 0]} receiveShadow>
         <boxGeometry args={[plot, 0.08, plot]} />
         <meshStandardMaterial color="#0f172a" roughness={0.8} />
         <Edges color={accent} lineWidth={1} transparent opacity={active ? 0.9 : 0.3} />
       </mesh>
+
+      {isHq && (
+        <group ref={pulses} name="hq-pulse">
+          {Array.from({ length: PULSE_COUNT }, (_, index) => (
+            <mesh key={index} position={[0, 0.09, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[1.9, 2.02, 96]} />
+              <meshBasicMaterial color={palette.hq} transparent opacity={0} depthWrite={false} toneMapped={false} />
+            </mesh>
+          ))}
+        </group>
+      )}
 
       {selected && (
         <mesh ref={ring} position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>

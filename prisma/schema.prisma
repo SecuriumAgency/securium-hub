@@ -1,0 +1,28 @@
+// Postgres (Neon, via le Vercel Marketplace). Prisma 7 refuse `url` et `directUrl` dans ce fichier :
+// la CLI (db push, migrate) se connecte via prisma7.config.ts (POSTGRES_URL_NON_POOLING, connexion
+// directe), l'application via lib/prisma.ts (POSTGRES_PRISMA_URL, connexion poolée).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Lead reçu d'un site de la flotte via POST /api/leads/inbound.
+model Lead {
+  id        String   @id @default(cuid())
+  // ID du site émetteur, tel que défini dans lib/mock-data.json (ex. "elite-depannage-34").
+  siteId    String
+  name      String
+  phone     String
+  email     String?
+  service   String
+  source    String
+  createdAt DateTime @default(now())
+
+  // Comptages par site et par période (GET /api/leads).
+  @@index([siteId, createdAt])
+}

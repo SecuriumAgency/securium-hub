@@ -42,7 +42,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "npx tsc --noEmit; echo \"tsc exit=$?\"; npm run lint; echo \"lint exit=$?\"; git status --short",
+    "buildCommand": "npm run build 2>&1 | tail -25; echo \"build exit=${PIPESTATUS[0]}\"",
     "testCommand": null,
     "lintCommand": "npm run lint",
     "devCommand": "npm run dev",
@@ -117,33 +117,69 @@
   },
   "hotPaths": [
     {
-      "path": "app/page.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1792771093464,
-      "type": "file"
-    },
-    {
-      "path": "lib/use-fleet.ts",
-      "accessCount": 3,
-      "lastAccessed": 1792771041172,
-      "type": "file"
-    },
-    {
       "path": "components/hub/SitePanel.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1792771076825,
+      "accessCount": 9,
+      "lastAccessed": 1792774429695,
       "type": "file"
     },
     {
-      "path": "components/hub/models.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1792771044189,
+      "path": "app/page.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1792773530967,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 7,
+      "lastAccessed": 1792776188658,
       "type": "file"
     },
     {
       "path": "components/hub/SiteNode.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1792773486056,
+      "type": "file"
+    },
+    {
+      "path": "app/api/leads/route.ts",
+      "accessCount": 6,
+      "lastAccessed": 1792776031593,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/models.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1792773490173,
+      "type": "file"
+    },
+    {
+      "path": "lib/sites.ts",
+      "accessCount": 5,
+      "lastAccessed": 1792774441501,
+      "type": "file"
+    },
+    {
+      "path": "lib/use-fleet.ts",
+      "accessCount": 4,
+      "lastAccessed": 1792773387386,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/FleetHud.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1792774424157,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/NetworkLinks.tsx",
       "accessCount": 2,
-      "lastAccessed": 1792771061974,
+      "lastAccessed": 1792773440316,
+      "type": "file"
+    },
+    {
+      "path": "lib/leads.ts",
+      "accessCount": 2,
+      "lastAccessed": 1792774358952,
       "type": "file"
     },
     {
@@ -153,33 +189,69 @@
       "type": "file"
     },
     {
-      "path": "lib/sites.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792771013471,
-      "type": "file"
-    },
-    {
       "path": "app/api/fleet/route.ts",
       "accessCount": 1,
       "lastAccessed": 1792771028525,
       "type": "file"
     },
     {
-      "path": "components/hub/NetworkLinks.tsx",
+      "path": "lib/poll.ts",
       "accessCount": 1,
-      "lastAccessed": 1792771059204,
+      "lastAccessed": 1792773386017,
       "type": "file"
     },
     {
-      "path": "components/hub/FleetHud.tsx",
+      "path": "lib/use-leads.ts",
       "accessCount": 1,
-      "lastAccessed": 1792771078223,
+      "lastAccessed": 1792773401036,
       "type": "file"
     },
     {
-      "path": "README.md",
+      "path": "components/hub/TrafficSystem.tsx",
       "accessCount": 1,
-      "lastAccessed": 1792771528801,
+      "lastAccessed": 1792773441654,
+      "type": "file"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "accessCount": 1,
+      "lastAccessed": 1792774303493,
+      "type": "file"
+    },
+    {
+      "path": "prisma7.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792774305032,
+      "type": "file"
+    },
+    {
+      "path": "lib/db.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792774357452,
+      "type": "file"
+    },
+    {
+      "path": "lib/discord.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792774360426,
+      "type": "file"
+    },
+    {
+      "path": "app/api/leads/inbound/route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792774377433,
+      "type": "file"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "accessCount": 1,
+      "lastAccessed": 1792774443166,
+      "type": "file"
+    },
+    {
+      "path": "lib/month.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792774558049,
       "type": "file"
     }
   ],

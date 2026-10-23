@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Edges } from "@react-three/drei";
-import type { Mesh } from "three";
+import type { Mesh, MeshStandardMaterial } from "three";
 import type { Site } from "@/lib/sites";
 
 export const palette = {
@@ -17,6 +17,10 @@ export const palette = {
 
 // Hauteur du sommet de la flèche du QG (podium 0.6 + tour 5 + couronne 0.8 + flèche 1.2).
 const HQ_HEIGHT = 7.6;
+
+// Clignotement d'alerte des bâtiments hors ligne : intensité émissive maximale et pulsation (rad/s).
+const ALERT_INTENSITY = 0.9;
+const ALERT_SPEED = 7;
 
 export function siteHeight(site: Site) {
   return site.kind === "hq" ? HQ_HEIGHT : 1.2 + site.traffic / 5000;
@@ -33,17 +37,31 @@ type ModelProps = {
 };
 
 export function BuildingModel({ site, active }: ModelProps) {
+  const body = useRef<MeshStandardMaterial>(null);
   const height = siteHeight(site);
   const online = site.status === "online";
+  const offline = site.status === "offline";
   const accent = siteAccent(site);
   const floors = Math.floor((height - 0.4) / 0.8);
 
+  // Échec de build : le corps du bâtiment clignote en rouge, en phase sur toute la flotte (horloge
+  // partagée). emissiveIntensity n'est piloté que d'ici ; la prop JSX reste à 0 et n'est jamais réappliquée.
+  useFrame(({ clock }) => {
+    if (!body.current) return;
+    body.current.emissiveIntensity = offline
+      ? ALERT_INTENSITY * (0.5 + 0.5 * Math.sin(clock.elapsedTime * ALERT_SPEED)) ** 2
+      : 0;
+  });
+
   return (
     <group>
-      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
+      <mesh name="body" position={[0, height / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[1.6, height, 1.6]} />
         <meshStandardMaterial
+          ref={body}
           color={online ? palette.body : palette.bodyOffline}
+          emissive={palette.offline}
+          emissiveIntensity={0}
           roughness={0.55}
           metalness={0.35}
         />

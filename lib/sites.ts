@@ -11,7 +11,7 @@ export type Site = {
   status: SiteStatus;
   // ID du projet Vercel dont le dernier déploiement de production donne le statut du site.
   vercelProject?: string;
-  leads: number;
+  // Trafic de référence, fixe : il ne sert qu'à la hauteur du bâtiment.
   traffic: number;
   coords: [number, number, number];
 };
@@ -24,16 +24,7 @@ export const initialSites: Site[] = (data as Omit<Site, "status">[]).map((site) 
 }));
 
 const numberFormat = new Intl.NumberFormat("fr-FR");
-const percentFormat = new Intl.NumberFormat("fr-FR", {
-  style: "percent",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 export function formatNumber(value: number) {
   return numberFormat.format(value);
-}
-
-export function formatConversion(site: Site) {
-  return percentFormat.format(site.traffic > 0 ? site.leads / site.traffic : 0);
 }
