@@ -118,6 +118,24 @@ Chaque prospect a un historique d'échanges (`OutreachMessage`) : `OUTBOUND` pou
 
 Pour le faire tourner en tâche de fond sous PM2, même forme que le Chasseur, toutes les 15 minutes : `pm2 start "C:/Program Files/nodejs/node.exe" --name securium-inbound --cwd "C:/Securium-Workspace/securium-hub" --interpreter none --cron-restart "*/15 * * * *" --no-autorestart --time -- --import tsx scripts/agent-inbound.mts`.
 
+### Rapport quotidien de la flotte
+
+`scripts/fleet-daily-report.mts` envoie chaque soir un rapport par email : statut Vercel et leads (jour, mois, total) de chaque site, prospection (prospects contactés, brouillons à valider, emails envoyés et réponses du jour). La mise en page reprend celle de l'ancien « Rapport digital quotidien » de securium-agency-v2. Le rapport ne contient que des comptes : ni nom, ni téléphone, ni adresse. L'envoi passe par `lib/mail.ts` (variables `SMTP_*`), à `FLEET_REPORT_TO`, sinon `contact@securium-agency.fr`. Sans `VERCEL_API_TOKEN`, les statuts des sites sont marqués inconnus.
+
+Il tourne sous PM2 : `ecosystem.config.js`, application `securium-fleet-report`, cron `0 20 * * *` à l'heure du poste (Paris), `autorestart: false`. PM2 lance `node --import tsx` directement. Ni `script: "npx"` (sous Windows, PM2 fait exécuter `npx.cmd` par Node comme du JavaScript) ni le `.mts` en script (le conteneur de PM2 le charge avec `require()`) ne fonctionnent.
+
+```bash
+pm2 start ecosystem.config.js --only securium-fleet-report               # enregistre et envoie un premier rapport tout de suite
+pm2 start ecosystem.config.js --only securium-fleet-report --env dryrun  # essai à blanc : HTML dans le dossier temporaire, aucun envoi
+pm2 logs securium-fleet-report                                           # lignes « [FleetReport] Rapport envoyé avec succès à … »
+pm2 delete securium-fleet-report                                         # retire la tâche
+pm2 save                                                                 # la conserve au redémarrage de Windows
+```
+
+Journaux : `Securium-OS/logs/pm2-fleet-report-*.log`. Sans PM2 : `npx tsx scripts/fleet-daily-report.mts --dry-run`.
+
+Le workflow GitHub `daily-report.yml` de securium-agency-v2 reste distinct. Il envoie chaque soir les données d'audience GA4 et Search Console, que seul GitHub peut lire (compte de service dans ses secrets). Ce rapport-ci ne les reprend pas.
+
 ### Design system des pages admin
 
 Les pages admin (`/admin/*`, `components/admin/`) n'utilisent que les jetons sémantiques définis dans `app/globals.css` (Tailwind v4, bloc `@theme`) : `bg-background`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`, `border-border`, et pour les accents `primary`, `success`, `destructive`, `warning`, `draft`, avec ou sans opacité (`bg-primary/10`). Aucune couleur arbitraire. Elles sont pensées mobile d'abord : les classes sans préfixe visent les écrans de 320 px, `sm:`/`md:` élargissent la mise en page. Navigation en tiroir sur mobile, barre étendue à partir de `md` (`AdminNav`). Les zones cliquables font au moins 44 × 44 px. La page bloque le défilement horizontal, et les textes longs sont coupés (`truncate`) ou renvoyés à la ligne (`break-words`).

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasAdminSession } from "@/lib/admin-session";
-import { CONTACTED_STATUSES, DRAFT_STATUS, type DraftRecord, type OutreachStats } from "@/lib/chasseur";
+import { contactedProspectsWhere, DRAFT_STATUS, type DraftRecord, type OutreachStats } from "@/lib/chasseur";
 import { prisma } from "@/lib/prisma";
 
 // Brouillons de l'agent Chasseur en attente de validation (prospects au statut A_valider), du plus ancien
@@ -17,15 +17,7 @@ export async function GET() {
         include: { draft: true },
       }),
       prisma.outreachProspect.count(),
-      // Un brouillon en attente fait passer le prospect à A_valider : il reste compté s'il avait déjà été contacté.
-      prisma.outreachProspect.count({
-        where: {
-          OR: [
-            { status: { in: CONTACTED_STATUSES } },
-            { status: DRAFT_STATUS, draft: { is: { previousStatus: { in: CONTACTED_STATUSES } } } },
-          ],
-        },
-      }),
+      prisma.outreachProspect.count({ where: contactedProspectsWhere() }),
     ]);
     const drafts: DraftRecord[] = prospects
       .flatMap(({ draft, ...prospect }) =>

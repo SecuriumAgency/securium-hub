@@ -9,6 +9,17 @@ export const DRAFT_STATUS = "A_valider";
 export const SENT_STATUS = "Envoye";
 // Prospects qui ont reçu au moins un email : premier envoi ou relance.
 export const CONTACTED_STATUSES = [SENT_STATUS, "Relance_1"];
+
+// Filtre Prisma des prospects déjà contactés (« Emails envoyés » du Live Tracking, rapport quotidien).
+// Un brouillon en attente fait passer le prospect à A_valider : il reste compté s'il avait déjà été contacté.
+export function contactedProspectsWhere() {
+  return {
+    OR: [
+      { status: { in: CONTACTED_STATUSES } },
+      { status: DRAFT_STATUS, draft: { is: { previousStatus: { in: CONTACTED_STATUSES } } } },
+    ],
+  };
+}
 // Délai minimal depuis le dernier contact avant d'en rédiger un nouveau.
 export const MIN_DAYS_SINCE_CONTACT = 7;
 

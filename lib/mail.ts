@@ -1,7 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 
-// Envoi SMTP des emails de prospection validés sur /admin/outreach (PATCH /api/outreach/drafts/[id]),
-// depuis SMTP_FROM. Variables : SMTP_HOST, SMTP_PORT (465 : TLS direct ; autre : STARTTLS exigé),
+// Envoi SMTP depuis SMTP_FROM : emails de prospection validés sur /admin/outreach (PATCH
+// /api/outreach/drafts/[id]) et rapport quotidien de la flotte (scripts/fleet-daily-report.mts). Variables : SMTP_HOST, SMTP_PORT (465 : TLS direct ; autre : STARTTLS exigé),
 // SMTP_USER, SMTP_PASS, SMTP_FROM (« Securium Agency <contact@securium-agency.fr> » ou l'adresse seule).
 
 const SMTP_VARIABLES = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
@@ -57,22 +57,29 @@ export function textToHtml(text: string) {
   return `<div style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.5;">${escaped.replace(/\r?\n/g, "<br>")}</div>`;
 }
 
-// Envoie l'email (version HTML et texte de repli). Lève une erreur si le serveur refuse l'envoi ou le
-// destinataire : l'appelant ne doit alors rien enregistrer.
+type Email = { to: string; subject: string; html: string; text: string; headers?: Record<string, string> };
+
+// Envoie un email depuis SMTP_FROM (version HTML et texte de repli). Lève une erreur si le serveur
+// refuse l'envoi ou le destinataire : l'appelant ne doit alors rien enregistrer.
+export async function sendEmail({ to, subject, html, text, headers }: Email) {
+  const { transporter, from } = mailer();
+  const info = await transporter.sendMail({ from, to, subject, text, html, headers });
+  const rejected = info.rejected ?? [];
+  if (rejected.length > 0) throw new Error(`Destinataire refusé par le serveur SMTP : ${rejected.join(", ")}.`);
+  return { messageId: info.messageId };
+}
+
+// Email de prospection : corps en texte brut, converti en HTML, et désinscription en un clic côté
+// messagerie, en plus de la mention « STOP » du corps.
 export async function sendOutreachEmail({ to, subject, body }: { to: string; subject: string; body: string }) {
-  const { transporter, from, fromAddress } = mailer();
-  const info = await transporter.sendMail({
-    from,
+  const { fromAddress } = mailer();
+  return sendEmail({
     to,
     subject,
     text: body,
     html: textToHtml(body),
-    // Désinscription en un clic côté messagerie, en plus de la mention « STOP » du corps.
     headers: { "List-Unsubscribe": `<mailto:${fromAddress}?subject=STOP>` },
   });
-  const rejected = info.rejected ?? [];
-  if (rejected.length > 0) throw new Error(`Destinataire refusé par le serveur SMTP : ${rejected.join(", ")}.`);
-  return { messageId: info.messageId };
 }
 
 // Diagnostic : connexion et authentification auprès du serveur, sans rien envoyer.
