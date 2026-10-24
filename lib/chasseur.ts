@@ -10,6 +10,19 @@ export const SENT_STATUS = "Envoye";
 // Délai minimal depuis le dernier contact avant d'en rédiger un nouveau.
 export const MIN_DAYS_SINCE_CONTACT = 7;
 
+// Brouillon tel que le renvoie GET /api/outreach/drafts, dates en ISO.
+export type DraftRecord = {
+  id: string;
+  prospectId: string;
+  company: string;
+  email: string;
+  subject: string;
+  body: string;
+  previousStatus: string;
+  model: string;
+  createdAt: string;
+};
+
 export const SENDER = "Securium Agency, agence web";
 
 // Consigne de l'agent : la première phrase est celle de la mission, la suite borne ce qu'il peut affirmer.

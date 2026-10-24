@@ -74,7 +74,17 @@ Les prospects démarchés par e-mail par `securium-prospector` vivent dans la ta
 
 ### Agent Chasseur
 
-`npx tsx scripts/agent-chasseur.mts` rédige avec Claude (`claude-opus-5-5` par défaut, `ANTHROPIC_MODEL` sinon) un email court pour chaque prospect qui peut être relancé. Il n'envoie rien : chaque email devient un brouillon (`OutreachDraft`), et le prospect passe au statut `A_valider`. Sur `/admin/outreach`, chaque brouillon se relit, s'ouvre dans la messagerie, puis se marque comme envoyé : c'est ce clic qui pose `Envoye` et le dernier contact. Un brouillon rejeté rend au prospect son statut d'avant.
+`npx tsx scripts/agent-chasseur.mts` rédige avec Claude (`claude-opus-5-5` par défaut, `ANTHROPIC_MODEL` sinon) un email court pour chaque prospect qui peut être relancé. Il n'envoie rien : chaque email devient un brouillon (`OutreachDraft`), et le prospect passe au statut `A_valider`.
+
+Le panneau « Brouillons en attente (Chasseur) » de `/admin/outreach` les affiche sous forme de cartes, rafraîchies toutes les 30 s tant que l'onglet est visible. Chaque carte s'ouvre dans la messagerie pour l'envoi. « Valider & Envoyer » enregistre ensuite l'envoi : le Hub n'envoie rien lui-même, il pose `Envoye` et le dernier contact. « Rejeter » rend au prospect son statut d'avant. La carte s'efface, puis les compteurs et le tableau de la page sont relus, sans rechargement. Routes, toutes derrière la session admin, revérifiée par chaque route (`lib/admin-session.ts`) :
+
+| Route | Effet |
+| --- | --- |
+| `GET /api/outreach/drafts` | `{ drafts: [{ id, prospectId, company, email, subject, body, previousStatus, model, createdAt }], updatedAt }`, prospects au statut `A_valider` uniquement |
+| `PATCH /api/outreach/drafts/[id]` | Valide : prospect à `Envoye`, `lastContactAt` à maintenant, brouillon supprimé, dans une seule transaction |
+| `DELETE /api/outreach/drafts/[id]` | Rejette : brouillon supprimé, statut précédent rétabli |
+
+Réponses : 401 sans session, 400 identifiant invalide, 404 brouillon déjà traité (le panneau retire alors la carte), 500 base indisponible.
 
 - **Calendrier** (`lib/schedule.ts`) : jamais le samedi ni le dimanche, à l'heure de Paris, et seulement de 9h00 à 18h00 sauf `--any-hour`. Le contrôle passe avant tout le reste : hors créneau, l'agent écrit « Agent en pause (Week-end) » et s'arrête sans toucher ni à la base ni à Claude.
 - **Cibles** : tous les prospects, sauf les adresses de `blocklist.json` (relue à chaque passage ; si elle est illisible, l'agent s'arrête), les statuts `Desinscrit` et `Simulation`, les prospects qui ont déjà un brouillon en attente et ceux contactés il y a moins de 7 jours. Au plus 5 brouillons par passage (`--limit=N`), du contact le plus ancien au plus récent.
@@ -84,9 +94,13 @@ Les prospects démarchés par e-mail par `securium-prospector` vivent dans la ta
 
 Variables : `ANTHROPIC_API_KEY` (ou un profil `ant auth login`) dans `.env.local`, en plus de `POSTGRES_PRISMA_URL`. L'agent tourne avec `tsx`, et non avec Node seul, parce que le client Prisma généré importe ses modules sans extension.
 
+### Design system des pages admin
+
+Les pages admin (`/admin/*`, `components/admin/`) n'utilisent que les jetons sémantiques définis dans `app/globals.css` (Tailwind v4, bloc `@theme`) : `bg-background`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`, `border-border`, et pour les accents `primary`, `success`, `destructive`, `warning`, `draft`, avec ou sans opacité (`bg-primary/10`). Aucune couleur arbitraire. Elles sont pensées mobile d'abord : les classes sans préfixe visent les écrans de 320 px, `sm:`/`md:` élargissent la mise en page. Navigation en tiroir sur mobile, barre étendue à partir de `md` (`AdminNav`). Les zones cliquables font au moins 44 × 44 px. La page bloque le défilement horizontal, et les textes longs sont coupés (`truncate`) ou renvoyés à la ligne (`break-words`).
+
 ## Accès admin
 
-Tout le Hub (dashboard, `/admin/outreach`, `/api/fleet`, `/api/leads`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound` et `POST /api/outreach/import`, protégées par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
+Tout le Hub (dashboard, `/admin/outreach`, `/api/fleet`, `/api/leads`, `/api/outreach/drafts`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound` et `POST /api/outreach/import`, protégées par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
 
 `/login` compare le mot de passe à `ADMIN_PASSWORD`, puis pose le cookie HttpOnly `securium_admin_session`, valable 7 jours et signé HMAC-SHA256 avec `SESSION_SECRET` (`lib/session.ts`) : un cookie modifié, expiré ou signé avec une autre clé est refusé. Changer `SESSION_SECRET` déconnecte toutes les sessions.
 

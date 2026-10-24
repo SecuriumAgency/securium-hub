@@ -3,6 +3,19 @@
 :root {
   --background: #05070d;
   --foreground: #e2e8f0;
+  /* Jetons sémantiques du design system : les composants écrivent bg-card, text-muted-foreground,
+     border-border, bg-primary/10…, jamais une couleur arbitraire. Valeurs accordées à la palette
+     du Hub (slate pour les fonds, cyan, emerald, rose, amber et violet pour les accents). */
+  --card: rgb(2 6 23 / 0.4);
+  --muted: rgb(255 255 255 / 0.05);
+  --muted-foreground: #94a3b8;
+  --border: rgb(255 255 255 / 0.1);
+  --primary: #22d3ee;
+  --success: #34d399;
+  --destructive: #fb7185;
+  --warning: #fbbf24;
+  /* Brouillons de l'agent Chasseur en attente de validation. */
+  --draft: #a78bfa;
   /* Barres de défilement et contrôles natifs sombres, accordés au thème. */
   color-scheme: dark;
 }
@@ -10,6 +23,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-success: var(--success);
+  --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-draft: var(--draft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
