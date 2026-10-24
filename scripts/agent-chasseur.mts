@@ -16,7 +16,8 @@
  * relus à chaque passage et injectés dans la consigne de Claude. Sans brief complet, l'agent s'arrête.
  *
  * Exclus : adresses de blocklist.json (relue à chaque passage ; illisible, l'agent s'arrête), statuts
- * Desinscrit et Simulation, brouillon déjà en attente, dernier contact de moins de 7 jours.
+ * Desinscrit et Simulation, prospects qui ont répondu (réponse lue par scripts/agent-inbound.mts),
+ * brouillon déjà en attente, dernier contact de moins de 7 jours.
  * Envoyé à Claude : entreprise, domaine et historique de contact, jamais l'adresse ni le téléphone.
  * Options : --data=<dossier de blocklist.json>, par défaut celui de securium-prospector.
  * Variables (.env.local puis .env du Hub) : POSTGRES_PRISMA_URL, ANTHROPIC_API_KEY (ou un profil
@@ -111,12 +112,19 @@ try {
   }
 
   const prospects = await prisma.outreachProspect.findMany({
-    include: { draft: { select: { id: true } } },
+    include: {
+      draft: { select: { id: true } },
+      _count: { select: { messages: { where: { direction: chasseur.INBOUND } } } },
+    },
     orderBy: { lastContactAt: "asc" },
   });
   const excluded: Record<string, number> = {};
   const targets = prospects.filter((prospect) => {
-    const reason = chasseur.exclusionReason({ ...prospect, hasDraft: prospect.draft !== null }, blocklist, now);
+    const reason = chasseur.exclusionReason(
+      { ...prospect, hasDraft: prospect.draft !== null, hasReplied: prospect._count.messages > 0 },
+      blocklist,
+      now,
+    );
     if (reason) excluded[reason] = (excluded[reason] ?? 0) + 1;
     return reason === null;
   });

@@ -49,8 +49,30 @@ model OutreachProspect {
   importedAt    DateTime @default(now())
   // Email rédigé par l'agent Chasseur, en attente de validation : au plus un à la fois.
   draft         OutreachDraft?
+  // Échanges enregistrés par le Hub : emails envoyés à la validation, réponses lues en IMAP.
+  messages      OutreachMessage[]
 
   @@index([createdAt])
+}
+
+// Email échangé avec un prospect : OUTBOUND, envoyé par le Hub à la validation d'un brouillon (PATCH
+// /api/outreach/drafts/[id]) ; INBOUND, réponse lue dans la boîte IMAP par scripts/agent-inbound.mts.
+// Les emails antérieurs à la messagerie (registre du prospecteur) n'y figurent pas. Supprimé avec son
+// prospect (purge RGPD).
+model OutreachMessage {
+  id         String           @id @default(cuid())
+  prospectId String
+  prospect   OutreachProspect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  // "INBOUND" ou "OUTBOUND".
+  direction  String
+  subject    String
+  body       String           @db.Text
+  // En-tête Message-ID de l'email : une réponse déjà enregistrée ne l'est pas deux fois.
+  messageId  String?          @unique
+  // Date de l'email (en-tête Date pour une réponse), maintenant à défaut.
+  createdAt  DateTime         @default(now())
+
+  @@index([prospectId, createdAt])
 }
 
 // Brief de l'agent Chasseur, saisi sur /admin/outreach (POST /api/outreach/settings) : une seule

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasAdminSession } from "@/lib/admin-session";
-import { SENT_STATUS } from "@/lib/chasseur";
+import { OUTBOUND, SENT_STATUS } from "@/lib/chasseur";
 import { MailConfigError, sendOutreachEmail } from "@/lib/mail";
 import { prisma } from "@/lib/prisma";
 import { isWorkingTime } from "@/lib/schedule";
@@ -24,8 +24,8 @@ async function draftId(context: Context) {
 
 const notFound = () => NextResponse.json({ error: "Brouillon introuvable : déjà validé ou rejeté." }, { status: 404 });
 
-// Valider : le Hub envoie l'email en SMTP (lib/mail.ts), puis le prospect passe à « Envoye », daté de
-// maintenant, et le brouillon disparaît. Tout dans une transaction : si l'envoi échoue, rien n'est
+// Valider : le Hub envoie l'email en SMTP (lib/mail.ts), l'enregistre dans l'historique (OutreachMessage
+// OUTBOUND), puis le prospect passe à « Envoye », daté de maintenant, et le brouillon disparaît. Tout dans une transaction : si l'envoi échoue, rien n'est
 // écrit, le brouillon reste, et la réponse 500 détaille l'erreur.
 export async function PATCH(_request: NextRequest, context: Context) {
   const id = await draftId(context);
@@ -47,12 +47,17 @@ export async function PATCH(_request: NextRequest, context: Context) {
       // rien. Un seul envoi par brouillon.
       const { count } = await tx.outreachDraft.deleteMany({ where: { id } });
       if (count === 0) return null;
+      let sent: Awaited<ReturnType<typeof sendOutreachEmail>>;
       try {
-        await sendOutreachEmail({ to: draft.prospect.email, subject: draft.subject, body: draft.body });
+        sent = await sendOutreachEmail({ to: draft.prospect.email, subject: draft.subject, body: draft.body });
       } catch (error) {
         throw new SendError(error instanceof Error ? error.message : String(error), { cause: error });
       }
       emailSent = true;
+      // Historique des échanges : l'email tel qu'il est parti, avec son Message-ID.
+      await tx.outreachMessage.create({
+        data: { prospectId: draft.prospectId, direction: OUTBOUND, subject: draft.subject, body: draft.body, messageId: sent.messageId || null },
+      });
       return tx.outreachProspect.update({
         where: { id: draft.prospectId },
         data: { status: SENT_STATUS, lastContactAt: new Date() },

@@ -105,13 +105,26 @@ L'envoi a lieu sur le serveur qui reçoit la validation, donc sur Vercel en prod
 | `SMTP_USER`, `SMTP_PASS` | Identifiants du compte d'envoi |
 | `SMTP_FROM` | Expéditeur, par exemple `Securium Agency <contact@securium-agency.fr>`. Son adresse sert aussi à l'en-tête `List-Unsubscribe` (désinscription en un clic) |
 
+### Messagerie
+
+Chaque prospect a un historique d'échanges (`OutreachMessage`) : `OUTBOUND` pour un email envoyé par le Hub à la validation d'un brouillon, enregistré dans la même transaction que l'envoi ; `INBOUND` pour une réponse lue dans la boîte IMAP. Les emails antérieurs à la messagerie (registre du prospecteur) n'y figurent pas. Sur `/admin/outreach`, le bouton « Historique » de chaque prospect ouvre la conversation : plein écran sur mobile, panneau à droite à partir de `md`, vos emails à droite, ses réponses à gauche. Elle est relue toutes les 30 s tant que le panneau est ouvert (`GET /api/outreach/messages/[prospectId]`, session admin).
+
+`npx tsx scripts/agent-inbound.mts` lit la boîte `imap.ionos.fr:993` (TLS) avec `SMTP_USER` et `SMTP_PASS`, ceux de l'envoi, et examine au plus 200 emails non lus par passage. `--dry-run` compte sans rien écrire ni marquer.
+
+- **Seuls les emails de prospects sont touchés** : un email dont l'expéditeur est un prospect est enregistré, puis marqué comme lu. Tous les autres restent non lus : c'est la boîte de travail de l'agence. Le contenu est lu en `BODY.PEEK`, qui ne pose aucun drapeau.
+- **Une réponse n'est enregistrée qu'une fois**, grâce à son `Message-ID`. Elle n'est marquée comme lue qu'après son enregistrement.
+- **Une réponse qui commence par « STOP » est signalée dans le journal**, à reporter dans la blocklist du prospecteur (`npm run blacklist`). Le journal ne contient ni adresse ni contenu.
+- **Un prospect qui a répondu n'est plus ciblé par l'agent Chasseur** : la suite se fait à la main.
+
+Pour le faire tourner en tâche de fond sous PM2, même forme que le Chasseur, toutes les 15 minutes : `pm2 start "C:/Program Files/nodejs/node.exe" --name securium-inbound --cwd "C:/Securium-Workspace/securium-hub" --interpreter none --cron-restart "*/15 * * * *" --no-autorestart --time -- --import tsx scripts/agent-inbound.mts`.
+
 ### Design system des pages admin
 
 Les pages admin (`/admin/*`, `components/admin/`) n'utilisent que les jetons sémantiques définis dans `app/globals.css` (Tailwind v4, bloc `@theme`) : `bg-background`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`, `border-border`, et pour les accents `primary`, `success`, `destructive`, `warning`, `draft`, avec ou sans opacité (`bg-primary/10`). Aucune couleur arbitraire. Elles sont pensées mobile d'abord : les classes sans préfixe visent les écrans de 320 px, `sm:`/`md:` élargissent la mise en page. Navigation en tiroir sur mobile, barre étendue à partir de `md` (`AdminNav`). Les zones cliquables font au moins 44 × 44 px. La page bloque le défilement horizontal, et les textes longs sont coupés (`truncate`) ou renvoyés à la ligne (`break-words`).
 
 ## Accès admin
 
-Tout le Hub (dashboard, `/admin/outreach`, `/api/fleet`, `/api/leads`, `/api/outreach/drafts`, `/api/outreach/settings`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound` et `POST /api/outreach/import`, protégées par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
+Tout le Hub (dashboard, `/admin/outreach`, `/api/fleet`, `/api/leads`, `/api/outreach/drafts`, `/api/outreach/settings`, `/api/outreach/messages`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound` et `POST /api/outreach/import`, protégées par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
 
 `/login` compare le mot de passe à `ADMIN_PASSWORD`, puis pose le cookie HttpOnly `securium_admin_session`, valable 7 jours et signé HMAC-SHA256 avec `SESSION_SECRET` (`lib/session.ts`) : un cookie modifié, expiré ou signé avec une autre clé est refusé. Changer `SESSION_SECRET` déconnecte toutes les sessions.
 

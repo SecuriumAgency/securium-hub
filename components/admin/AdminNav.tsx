@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Send, X } from "lucide-react";
+import { useOverlay } from "./use-overlay";
 
 const LINKS = [
   { href: "/", label: "Hub 3D" },
@@ -20,22 +21,8 @@ export function AdminNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const closeButton = useRef<HTMLButtonElement>(null);
-
-  // Tiroir ouvert : focus sur la fermeture, Échap ferme, la page derrière ne défile plus.
-  useEffect(() => {
-    if (!open) return;
-    closeButton.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = overflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useOverlay(open, close, closeButton);
 
   return (
     <nav aria-label="Administration" className="flex items-center justify-between gap-3">

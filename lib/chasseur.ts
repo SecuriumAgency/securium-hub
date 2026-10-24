@@ -12,6 +12,19 @@ export const CONTACTED_STATUSES = [SENT_STATUS, "Relance_1"];
 // Délai minimal depuis le dernier contact avant d'en rédiger un nouveau.
 export const MIN_DAYS_SINCE_CONTACT = 7;
 
+// Sens d'un échange (OutreachMessage) : réponse du prospect ou email envoyé par le Hub.
+export const INBOUND = "INBOUND";
+export const OUTBOUND = "OUTBOUND";
+
+// Message tel que le renvoie GET /api/outreach/messages/[prospectId], date en ISO.
+export type MessageRecord = {
+  id: string;
+  direction: typeof INBOUND | typeof OUTBOUND;
+  subject: string;
+  body: string;
+  createdAt: string;
+};
+
 // Brouillon tel que le renvoie GET /api/outreach/drafts, dates en ISO.
 export type DraftRecord = {
   id: string;
@@ -133,12 +146,15 @@ export function prospectContext(prospect: ProspectFacts) {
   ].join("\n");
 }
 
-type Eligibility = { email: string; status: string; lastContactAt: Date; hasDraft: boolean };
+// hasReplied : au moins une réponse enregistrée (OutreachMessage INBOUND, lue par scripts/agent-inbound.mts).
+type Eligibility = { email: string; status: string; lastContactAt: Date; hasDraft: boolean; hasReplied: boolean };
 
 // Raison pour laquelle un prospect ne peut pas être ciblé, ou null s'il peut l'être.
 export function exclusionReason(prospect: Eligibility, blocklist: ReadonlySet<string>, now: Date) {
   if (blocklist.has(prospect.email)) return "blocklist";
   if (isExcludedStatus(prospect.status)) return "statut exclu";
+  // Il a répondu (peut-être « STOP ») : la suite se fait à la main, jamais par une relance automatique.
+  if (prospect.hasReplied) return "a répondu";
   if (prospect.hasDraft || prospect.status === DRAFT_STATUS) return "brouillon en attente";
   if (now.getTime() - prospect.lastContactAt.getTime() < MIN_DAYS_SINCE_CONTACT * DAY_MS) return "contact récent";
   return null;

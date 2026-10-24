@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AgentSettingsForm } from "@/components/admin/AgentSettingsForm";
 import { DraftsPanel } from "@/components/admin/DraftsPanel";
+import { ProspectHistory } from "@/components/admin/ProspectHistory";
 import { DRAFT_STATUS } from "@/lib/chasseur";
 import { prisma } from "@/lib/prisma";
 
@@ -103,7 +104,7 @@ export default async function OutreachPage() {
                   <caption className="sr-only">Prospects démarchés, du dernier contact le plus récent au plus ancien</caption>
                   <thead className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      {["Premier contact", "Dernier contact", "Entreprise", "Email", "Téléphone", "Statut", "Source"].map((column) => (
+                      {["Premier contact", "Dernier contact", "Entreprise", "Email", "Téléphone", "Statut", "Source", "Échanges"].map((column) => (
                         <th key={column} scope="col" className="px-4 py-3 font-medium">
                           {column}
                         </th>
@@ -131,6 +132,9 @@ export default async function OutreachPage() {
                         </td>
                         <td className="max-w-40 truncate px-4 text-muted-foreground" title={prospect.source}>
                           {prospect.source}
+                        </td>
+                        <td className="px-4 py-2">
+                          <ProspectHistory prospectId={prospect.id} company={prospect.company} />
                         </td>
                       </tr>
                     ))}
@@ -165,6 +169,9 @@ function ProspectItem({ prospect }: { prospect: Prospect }) {
       <p className="text-xs text-muted-foreground">
         Premier contact {dateFormat.format(prospect.createdAt)} · dernier {dateFormat.format(prospect.lastContactAt)}
       </p>
+      <div className="mt-2 flex">
+        <ProspectHistory prospectId={prospect.id} company={prospect.company} />
+      </div>
     </li>
   );
 }
