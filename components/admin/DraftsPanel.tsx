@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Inbox, Loader2, Mail, Send, Users, X } from "lucide-react";
+import { Check, Inbox, Loader2, Send, Users, X } from "lucide-react";
 import { CONTACTED_STATUSES, type DraftRecord, type OutreachStats } from "@/lib/chasseur";
 import { startPolling } from "@/lib/poll";
 
@@ -60,8 +60,8 @@ export function DraftsPanel() {
       }
       // 404 : déjà traité ailleurs (autre onglet) ; la carte disparaît comme après un succès.
       if (!response.ok && response.status !== 404) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `Erreur ${response.status}.`);
+        const body = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        throw new Error(body?.error ? `${body.error}${body.detail ? ` (${body.detail})` : ""}` : `Erreur ${response.status}.`);
       }
       handled.current.add(draft.id);
       setCard(draft.id, { leaving: true });
@@ -105,9 +105,9 @@ export function DraftsPanel() {
           )}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Rédigés par Claude, jamais envoyés sans vous. Ouvrez l&apos;email dans votre messagerie et envoyez-le, puis
-          « Valider &amp; Envoyer » enregistre l&apos;envoi (statut « Envoye »). « Rejeter » rend au prospect son statut
-          d&apos;avant.
+          Rédigés par Claude, jamais envoyés sans vous. « Valider &amp; Envoyer » envoie l&apos;email depuis l&apos;adresse
+          de Securium Agency, puis passe le prospect à « Envoye » ; si l&apos;envoi échoue, le brouillon reste. Aucun
+          envoi le week-end. « Rejeter » rend au prospect son statut d&apos;avant.
         </p>
         {failed && drafts && (
           <p role="status" className="text-xs text-warning">
@@ -172,7 +172,6 @@ function StatCard({ icon, label, hint, value, accent }: { icon: ReactNode; label
 
 function DraftCard({ draft, state, onAction }: { draft: DraftRecord; state: CardState; onAction: (action: Action) => void }) {
   const busy = Boolean(state.pending || state.leaving);
-  const mailto = `mailto:${draft.email}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
 
   return (
     <li
@@ -203,13 +202,6 @@ function DraftCard({ draft, state, onAction }: { draft: DraftRecord; state: Card
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <a
-          href={mailto}
-          className={`${buttonBase} border-border bg-muted text-foreground hover:border-primary/40 focus-visible:outline-primary`}
-        >
-          <Mail aria-hidden className="size-4" />
-          Ouvrir dans la messagerie
-        </a>
         <button
           type="button"
           disabled={busy}

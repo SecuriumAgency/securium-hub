@@ -76,14 +76,14 @@ Les prospects démarchés par e-mail par `securium-prospector` vivent dans la ta
 
 `npx tsx scripts/agent-chasseur.mts` rédige avec Claude (`claude-opus-5-5` par défaut, `ANTHROPIC_MODEL` sinon) un email court pour chaque prospect qui peut être relancé. Il n'envoie rien : chaque email devient un brouillon (`OutreachDraft`), et le prospect passe au statut `A_valider`.
 
-Sur `/admin/outreach`, le Live Tracking affiche trois compteurs : prospects ciblés, réponses à valider, emails envoyés. Ils sont rafraîchis avec les brouillons, en une seule requête, et suivent aussitôt chaque validation. Le panneau « Brouillons en attente (Chasseur) » affiche les brouillons sous forme de cartes, rafraîchies toutes les 30 s tant que l'onglet est visible. Chaque carte s'ouvre dans la messagerie pour l'envoi. « Valider & Envoyer » enregistre ensuite l'envoi : le Hub n'envoie rien lui-même, il pose `Envoye` et le dernier contact. « Rejeter » rend au prospect son statut d'avant. La carte s'efface, puis les compteurs et le tableau de la page sont relus, sans rechargement. Routes, toutes derrière la session admin, revérifiée par chaque route (`lib/admin-session.ts`) :
+Sur `/admin/outreach`, le Live Tracking affiche trois compteurs : prospects ciblés, réponses à valider, emails envoyés. Ils sont rafraîchis avec les brouillons, en une seule requête, et suivent aussitôt chaque validation. Le panneau « Brouillons en attente (Chasseur) » affiche les brouillons sous forme de cartes, rafraîchies toutes les 30 s tant que l'onglet est visible. « Valider & Envoyer » fait envoyer l'email par le Hub, en SMTP depuis `SMTP_FROM` (`lib/mail.ts`, Nodemailer, version HTML et texte de repli), puis pose `Envoye` et le dernier contact. Si l'envoi échoue, rien n'est enregistré, le brouillon reste, et la carte affiche l'erreur du serveur. Aucun envoi le week-end (heure de Paris), comme pour l'agent. « Rejeter » rend au prospect son statut d'avant. La carte s'efface, puis les compteurs et le tableau de la page sont relus, sans rechargement. Routes, toutes derrière la session admin, revérifiée par chaque route (`lib/admin-session.ts`) :
 
 | Route | Effet |
 | --- | --- |
 | `GET /api/outreach/drafts` | `{ drafts: [{ id, prospectId, company, email, subject, body, previousStatus, model, createdAt }], stats: { prospects, drafts, sent }, updatedAt }` : brouillons des prospects au statut `A_valider`, et compteurs du Live Tracking (prospects en base, brouillons en attente, prospects déjà contactés : statut `Envoye` ou `Relance_1`, y compris ceux en `A_valider` qui avaient l'un de ces statuts avant leur brouillon) |
 | `GET /api/outreach/settings` | `{ settings: { productDescription, targetAudience, updatedAt } \| null }` : le brief de l'agent |
 | `POST /api/outreach/settings` | Enregistre le brief. Corps JSON `{ productDescription, targetAudience }` (415 si le corps n'est pas du JSON, 422 si un champ est vide ou trop long) |
-| `PATCH /api/outreach/drafts/[id]` | Valide : prospect à `Envoye`, `lastContactAt` à maintenant, brouillon supprimé, dans une seule transaction |
+| `PATCH /api/outreach/drafts/[id]` | Valide et envoie, dans une seule transaction : le brouillon est réservé (une validation simultanée ne trouve plus rien, donc un seul envoi), l'email part en SMTP, puis le prospect passe à `Envoye` avec `lastContactAt` à maintenant. Envoi en échec : transaction annulée, brouillon conservé, 500 avec `detail`. 423 le week-end |
 | `DELETE /api/outreach/drafts/[id]` | Rejette : brouillon supprimé, statut précédent rétabli |
 
 Réponses : 401 sans session, 400 identifiant invalide, 404 brouillon déjà traité (le panneau retire alors la carte), 500 base indisponible.
@@ -96,6 +96,14 @@ Réponses : 401 sans session, 400 identifiant invalide, 404 brouillon déjà tra
 - **Essai à blanc** : `--dry-run` compte les prospects ciblables, sans appeler Claude ni écrire. `--now=<date ISO>` simule une autre heure, en essai à blanc seulement.
 
 Variables : `ANTHROPIC_API_KEY` (ou un profil `ant auth login`) dans `.env.local`, en plus de `POSTGRES_PRISMA_URL`. L'agent tourne avec `tsx`, et non avec Node seul, parce que le client Prisma généré importe ses modules sans extension.
+
+L'envoi a lieu sur le serveur qui reçoit la validation, donc sur Vercel en production : ces variables doivent figurer dans le projet Vercel du Hub, et pas seulement dans `.env.local`. Sans elles, la validation répond 500 « SMTP non configuré » et le brouillon reste.
+
+| Variable | Rôle |
+| --- | --- |
+| `SMTP_HOST`, `SMTP_PORT` | Serveur d'envoi. Port 465 : TLS direct ; autre port : STARTTLS exigé |
+| `SMTP_USER`, `SMTP_PASS` | Identifiants du compte d'envoi |
+| `SMTP_FROM` | Expéditeur, par exemple `Securium Agency <contact@securium-agency.fr>`. Son adresse sert aussi à l'en-tête `List-Unsubscribe` (désinscription en un clic) |
 
 ### Design system des pages admin
 
