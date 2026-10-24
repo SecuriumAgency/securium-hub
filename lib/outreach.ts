@@ -73,6 +73,18 @@ export function parseIsoDate(value: unknown) {
   return Number.isNaN(time) ? null : new Date(time);
 }
 
+// Liste noire de securium-prospector (blocklist.json), sous ses trois formes : ["a@b.fr"], [{ email }],
+// { entries: [{ email }] }. Adresses normalisées. null si la forme est inconnue : l'appelant doit alors
+// s'arrêter plutôt que risquer de cibler un désinscrit.
+export function parseBlocklist(data: unknown): string[] | null {
+  const entries = Array.isArray(data) ? data : isRecord(data) && Array.isArray(data.entries) ? data.entries : null;
+  if (!entries) return null;
+  return entries.flatMap((entry) => {
+    const email = typeof entry === "string" ? entry : isRecord(entry) && typeof entry.email === "string" ? entry.email : "";
+    return email.trim() ? [normalizeEmail(email)] : [];
+  });
+}
+
 // Tout ou rien : une seule entrée invalide fait rejeter le lot, pour qu'une synchronisation ne soit
 // jamais partielle en silence. Une adresse ne peut pas être à la fois à créer et à purger.
 export function parseOutreachBatch(

@@ -47,6 +47,24 @@ model OutreachProspect {
   lastContactAt DateTime
   // Entrée dans le Hub, pour la traçabilité.
   importedAt    DateTime @default(now())
+  // Email rédigé par l'agent Chasseur, en attente de validation : au plus un à la fois.
+  draft         OutreachDraft?
 
   @@index([createdAt])
+}
+
+// Email rédigé par l'agent Chasseur (scripts/agent-chasseur.mts), en attente de validation humaine
+// sur /admin/outreach : rien ne part sans elle. Supprimé avec son prospect (purge RGPD), ou quand la
+// synchronisation apporte un contact plus récent qui le rend obsolète.
+model OutreachDraft {
+  id             String           @id @default(cuid())
+  prospectId     String           @unique
+  prospect       OutreachProspect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  subject        String
+  body           String
+  // Statut du prospect avant le brouillon, rétabli si le brouillon est rejeté.
+  previousStatus String
+  // Modèle Claude qui a rédigé le brouillon.
+  model          String
+  createdAt      DateTime         @default(now())
 }

@@ -11,7 +11,8 @@
  * Le registre prospects.csv journalise des actions (envoi, relance…) : plusieurs lignes par
  * prospect. Le script les regroupe par adresse : premier contact (createdAt), dernière action
  * (lastContactAt), dernier statut, entreprise et téléphone les plus récents. Le Hub crée les
- * nouveaux prospects et met à jour les autres (statut, dernier contact, téléphone, source).
+ * nouveaux prospects et ne met à jour (statut, dernier contact, téléphone, source) que ceux dont le
+ * registre a un contact plus récent que le sien : un email validé dans le Hub n'est pas écrasé.
  *
  * RGPD : un prospect désinscrit (statut Desinscrit sur une de ses lignes, ou adresse dans
  * blocklist.json) n'est jamais envoyé comme prospect ; son adresse part dans unsubscribedEmails, et
@@ -31,6 +32,7 @@ import {
   MAX_UNSUBSCRIBED,
   normalizeEmail,
   normalizeStatus,
+  parseBlocklist,
   parseIsoDate,
   parseOutreachBatch,
   type OutreachBatchInput,
@@ -89,7 +91,6 @@ function parseCsv(text: string): string[][] {
   return rows.filter((cells) => cells.some((cell) => cell.trim() !== ""));
 }
 
-// Trois formes acceptées, comme dans securium-prospector : ["a@b.fr"], [{ email }], { entries: [{ email }] }.
 function readBlocklist(file: string): Set<string> {
   let parsed: unknown;
   try {
@@ -97,17 +98,7 @@ function readBlocklist(file: string): Set<string> {
   } catch (error) {
     fail(`blocklist illisible (${file}) : ${(error as Error).message}. Sans elle, des désinscrits pourraient être importés.`);
   }
-  const entries = Array.isArray(parsed)
-    ? parsed
-    : typeof parsed === "object" && parsed !== null && Array.isArray((parsed as { entries?: unknown }).entries)
-      ? (parsed as { entries: unknown[] }).entries
-      : fail(`blocklist de forme inconnue (${file}).`);
-  return new Set(
-    entries
-      .map((entry) => (typeof entry === "string" ? entry : typeof entry === "object" && entry !== null ? (entry as { email?: unknown }).email : null))
-      .filter((email): email is string => typeof email === "string" && email.trim() !== "")
-      .map(normalizeEmail),
-  );
+  return new Set(parseBlocklist(parsed) ?? fail(`blocklist de forme inconnue (${file}).`));
 }
 
 type Row = { date: number; company: string; email: string; phone: string; status: string };
@@ -220,7 +211,7 @@ if (url.protocol !== "https:" && !(url.protocol === "http:" && LOCAL_HOSTNAMES.h
   fail(`HTTPS requis hors de la machine locale (${url.href}).`);
 }
 
-const totals = { created: 0, updated: 0, purged: 0 };
+const totals = { created: 0, updated: 0, unchanged: 0, purged: 0 };
 for (const [index, batch] of batches.entries()) {
   const response = await fetch(url, {
     method: "POST",
@@ -230,15 +221,19 @@ for (const [index, batch] of batches.entries()) {
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   const body = (await response.json().catch(() => null)) as
-    | { created?: number; updated?: number; purged?: number; error?: string; details?: string[] }
+    | { created?: number; updated?: number; unchanged?: number; purged?: number; error?: string; details?: string[] }
     | null;
   if (response.status !== 200) {
     fail(`lot ${index + 1}/${batches.length} refusé, HTTP ${response.status} ${body?.error ?? ""}${body?.details ? `\n  ${body.details.join("\n  ")}` : ""}`);
   }
-  const result = { created: body?.created ?? 0, updated: body?.updated ?? 0, purged: body?.purged ?? 0 };
+  const result = { created: body?.created ?? 0, updated: body?.updated ?? 0, unchanged: body?.unchanged ?? 0, purged: body?.purged ?? 0 };
   totals.created += result.created;
   totals.updated += result.updated;
+  totals.unchanged += result.unchanged;
   totals.purged += result.purged;
-  console.log(`lot ${index + 1}/${batches.length} : ${result.created} créé(s), ${result.updated} mis à jour, ${result.purged} purgé(s)`);
+  console.log(`lot ${index + 1}/${batches.length} : ${result.created} créé(s), ${result.updated} mis à jour, ${result.unchanged} inchangé(s), ${result.purged} purgé(s)`);
 }
-console.log(`Synchronisation terminée vers ${url.origin} : ${totals.created} créé(s), ${totals.updated} mis à jour, ${totals.purged} désinscrit(s) purgé(s).`);
+console.log(
+  `Synchronisation terminée vers ${url.origin} : ${totals.created} créé(s), ${totals.updated} mis à jour, ` +
+    `${totals.unchanged} inchangé(s) (contact du Hub aussi récent ou plus), ${totals.purged} désinscrit(s) purgé(s).`,
+);
