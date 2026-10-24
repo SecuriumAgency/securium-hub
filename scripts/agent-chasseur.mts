@@ -7,9 +7,13 @@
  *   npx tsx scripts/agent-chasseur.mts --limit=10    au plus 10
  *   npx tsx scripts/agent-chasseur.mts --dry-run     compte les prospects ciblables, sans Claude ni écriture
  *
- * Calendrier : jamais le samedi ni le dimanche (heure de Paris), et seulement de 9h00 à 18h00 sauf
- * --any-hour. Vérifié avant tout le reste : hors créneau, ni la base ni Claude ne sont touchés.
- * --now=<date ISO> simule une autre heure, en essai à blanc seulement.
+ * Calendrier : jamais le samedi ni le dimanche, et seulement de 9h00 à 18h00 sauf --any-hour. Double
+ * verrou du week-end, avant tout le reste : horloge de la machine d'abord (aucune heure simulée), puis
+ * heure de Paris (isWorkingTime). Hors créneau, ni la base ni Claude ne sont touchés.
+ * --now=<date ISO> simule une autre heure, en essai à blanc seulement, et jamais un samedi ou un dimanche réel.
+ *
+ * Brief : « Ce que tu vends » et « Ton client idéal » (table AgentSettings, saisis sur /admin/outreach),
+ * relus à chaque passage et injectés dans la consigne de Claude. Sans brief complet, l'agent s'arrête.
  *
  * Exclus : adresses de blocklist.json (relue à chaque passage ; illisible, l'agent s'arrête), statuts
  * Desinscrit et Simulation, brouillon déjà en attente, dernier contact de moins de 7 jours.
@@ -21,6 +25,14 @@
  * Lancé avec tsx et non Node seul : le client Prisma généré importe ses modules sans extension.
  */
 import { isWorkingTime, OFFICE_HOURS } from "../lib/schedule.ts";
+
+// Verrou strict, avant tout le reste : samedi et dimanche selon l'horloge de la machine (Paris sur le
+// poste Securium), sans heure simulée possible. isWorkingTime() refait le contrôle à l'heure de Paris
+// juste après : les deux doivent laisser passer.
+if (new Date().getDay() === 0 || new Date().getDay() === 6) {
+  console.log("Agent en pause stricte (Week-end).");
+  process.exit(0);
+}
 
 const option = (name: string) => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
 const dryRun = process.argv.includes("--dry-run");
@@ -87,6 +99,17 @@ try {
 const blocklist = new Set(parseBlocklist(blocklistData) ?? fail(`blocklist de forme inconnue (${blocklistFile}).`));
 
 try {
+  // Brief saisi sur /admin/outreach : sans lui, l'agent ne sait ni quoi proposer ni à qui.
+  const brief = await prisma.agentSettings.findUnique({ where: { id: chasseur.AGENT_SETTINGS_ID } });
+  const briefIssue = chasseur.briefError(brief);
+  if (!brief || briefIssue) {
+    const message = `Agent non briefé (${briefIssue}) : renseignez « Ce que tu vends » et « Ton client idéal » dans Configuration de l'Agent, sur /admin/outreach.`;
+    if (!dryRun) fail(message);
+    console.log(message);
+  } else {
+    console.log(`Brief du ${brief.updatedAt.toISOString()} : chargé.`);
+  }
+
   const prospects = await prisma.outreachProspect.findMany({
     include: { draft: { select: { id: true } } },
     orderBy: { lastContactAt: "asc" },
@@ -105,10 +128,11 @@ try {
 
   if (dryRun) {
     console.log("Essai à blanc : ni Claude ni écriture.");
-  } else if (batch.length > 0) {
+  } else if (batch.length > 0 && brief) {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic();
     const model = process.env.ANTHROPIC_MODEL ?? "claude-opus-5-5";
+    const system = chasseur.systemPrompt(brief);
     const outcome = { drafted: 0, refused: 0, rejected: 0, gone: 0 };
 
     for (const prospect of batch) {
@@ -119,7 +143,7 @@ try {
         max_tokens: MAX_TOKENS,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
-        system: chasseur.SYSTEM_PROMPT,
+        system,
         output_config: { effort: "medium", format: { type: "json_schema", schema: chasseur.DRAFT_SCHEMA } },
         messages: [{ role: "user", content: chasseur.prospectContext(prospect) }],
       });

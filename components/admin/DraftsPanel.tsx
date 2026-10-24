@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Mail, X } from "lucide-react";
-import type { DraftRecord } from "@/lib/chasseur";
+import { Check, Inbox, Loader2, Mail, Send, Users, X } from "lucide-react";
+import { CONTACTED_STATUSES, type DraftRecord, type OutreachStats } from "@/lib/chasseur";
 import { startPolling } from "@/lib/poll";
 
 const POLL_INTERVAL_MS = 30_000;
@@ -19,11 +19,13 @@ type CardState = { pending?: Action; leaving?: boolean; error?: string };
 const buttonBase =
   "flex min-h-[44px] min-w-[44px] w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium transition-colors focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto";
 
-// Brouillons de l'agent Chasseur en attente, rafraîchis toutes les 30 s. Valider ou rejeter appelle
-// l'API sans recharger la page ; la carte s'efface, puis les compteurs de la page sont relus.
+// Live Tracking et brouillons de l'agent Chasseur, rafraîchis ensemble toutes les 30 s (une seule
+// requête). Valider ou rejeter appelle l'API sans recharger la page ; la carte s'efface, les compteurs
+// suivent aussitôt, puis la page relit son tableau.
 export function DraftsPanel() {
   const router = useRouter();
   const [drafts, setDrafts] = useState<DraftRecord[] | null>(null);
+  const [stats, setStats] = useState<OutreachStats | null>(null);
   const [failed, setFailed] = useState(false);
   const [cards, setCards] = useState<Record<string, CardState>>({});
   // Traités dans cet onglet : un relevé parti avant le traitement ne doit pas les faire réapparaître.
@@ -31,11 +33,12 @@ export function DraftsPanel() {
 
   useEffect(
     () =>
-      startPolling<{ drafts: DraftRecord[] }>(
+      startPolling<{ drafts: DraftRecord[]; stats: OutreachStats }>(
         "/api/outreach/drafts",
         POLL_INTERVAL_MS,
-        ({ drafts: next }) => {
+        ({ drafts: next, stats: counts }) => {
           setDrafts(next.filter((draft) => !handled.current.has(draft.id)));
+          setStats(counts);
           setFailed(false);
         },
         () => setFailed(true),
@@ -62,6 +65,12 @@ export function DraftsPanel() {
       }
       handled.current.add(draft.id);
       setCard(draft.id, { leaving: true });
+      // Compteurs mis à jour sans attendre le prochain relevé, qui les recalera de toute façon. Un prospect
+      // déjà contacté avant le brouillon était déjà compté dans « Emails envoyés ».
+      if (response.ok) {
+        const firstContact = action === "validate" && !CONTACTED_STATUSES.includes(draft.previousStatus);
+        setStats((counts) => counts && { ...counts, drafts: Math.max(0, counts.drafts - 1), sent: counts.sent + (firstContact ? 1 : 0) });
+      }
       window.setTimeout(() => {
         setDrafts((list) => list?.filter((item) => item.id !== draft.id) ?? list);
         // Relit les compteurs et le tableau rendus par le serveur, sans rechargement.
@@ -73,6 +82,18 @@ export function DraftsPanel() {
   };
 
   return (
+    <>
+    <section aria-labelledby="live-title" className="flex flex-col gap-4">
+      <h2 id="live-title" className="text-lg font-semibold text-foreground md:text-xl">
+        Live Tracking
+      </h2>
+      <ul className="flex flex-col gap-4 md:flex-row">
+        <StatCard icon={<Users aria-hidden className="size-5" />} label="Prospects ciblés" hint="Total dans la base" value={stats?.prospects} accent="text-primary" />
+        <StatCard icon={<Inbox aria-hidden className="size-5" />} label="Réponses à valider" hint="Brouillons en attente" value={stats?.drafts} accent="text-draft" />
+        <StatCard icon={<Send aria-hidden className="size-5" />} label="Emails envoyés" hint="Prospects déjà contactés" value={stats?.sent} accent="text-success" />
+      </ul>
+    </section>
+
     <section aria-labelledby="drafts-title" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 id="drafts-title" className="flex flex-wrap items-center gap-2 text-lg font-semibold text-foreground md:text-xl">
@@ -127,6 +148,25 @@ export function DraftsPanel() {
         </ul>
       )}
     </section>
+    </>
+  );
+}
+
+// Carte de statistique : `value` undefined tant que le premier relevé n'est pas arrivé.
+function StatCard({ icon, label, hint, value, accent }: { icon: ReactNode; label: string; hint: string; value?: number; accent: string }) {
+  return (
+    <li className="flex flex-1 items-center gap-4 rounded-xl border border-border bg-card p-4 md:p-6">
+      <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted ${accent}`}>{icon}</span>
+      <div className="min-w-0">
+        <p className="truncate text-sm text-muted-foreground">{label}</p>
+        {value === undefined ? (
+          <div aria-hidden className="mt-1 h-8 w-12 animate-pulse rounded bg-muted" />
+        ) : (
+          <p className={`text-3xl font-semibold tabular-nums transition-colors duration-300 ${accent}`}>{value}</p>
+        )}
+        <p className="truncate text-xs text-muted-foreground">{hint}</p>
+      </div>
+    </li>
   );
 }
 

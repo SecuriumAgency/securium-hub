@@ -53,6 +53,17 @@ model OutreachProspect {
   @@index([createdAt])
 }
 
+// Brief de l'agent Chasseur, saisi sur /admin/outreach (POST /api/outreach/settings) : une seule
+// ligne, id « default ». L'agent le lit à chaque passage et refuse de rédiger sans lui.
+model AgentSettings {
+  id                 String   @id
+  // Ce que l'agence vend.
+  productDescription String
+  // Le client idéal visé.
+  targetAudience     String
+  updatedAt          DateTime @updatedAt
+}
+
 // Email rédigé par l'agent Chasseur (scripts/agent-chasseur.mts), en attente de validation humaine
 // sur /admin/outreach : rien ne part sans elle. Supprimé avec son prospect (purge RGPD), ou quand la
 // synchronisation apporte un contact plus récent qui le rend obsolète.

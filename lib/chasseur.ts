@@ -7,6 +7,8 @@ import { isExcludedStatus } from "./outreach";
 export const DRAFT_STATUS = "A_valider";
 // Posé à la validation, quand l'email part vraiment.
 export const SENT_STATUS = "Envoye";
+// Prospects qui ont reçu au moins un email : premier envoi ou relance.
+export const CONTACTED_STATUSES = [SENT_STATUS, "Relance_1"];
 // Délai minimal depuis le dernier contact avant d'en rédiger un nouveau.
 export const MIN_DAYS_SINCE_CONTACT = 7;
 
@@ -23,18 +25,74 @@ export type DraftRecord = {
   createdAt: string;
 };
 
+// Compteurs du Live Tracking de /admin/outreach, renvoyés avec les brouillons par GET /api/outreach/drafts.
+export type OutreachStats = {
+  // Prospects en base.
+  prospects: number;
+  // Brouillons en attente de validation.
+  drafts: number;
+  // Prospects déjà contactés : statut Envoye ou Relance_1, y compris ceux qui ont un brouillon en
+  // attente (statut A_valider) et qui avaient l'un de ces statuts avant lui.
+  sent: number;
+};
+
 export const SENDER = "Securium Agency, agence web";
 
-// Consigne de l'agent : la première phrase est celle de la mission, la suite borne ce qu'il peut affirmer.
-// Le prospect n'est connu que par son entreprise, son domaine et son historique de contact : ce qui
-// n'y figure pas ne doit pas apparaître dans l'email.
-export const SYSTEM_PROMPT = `Tu es un assistant de prospection. Rédige un email court, ultra-personnalisé, sans ton commercial agressif, basé sur les données de l'entreprise cible.
+// Brief de l'agent (table AgentSettings, ligne unique), saisi sur /admin/outreach.
+export const AGENT_SETTINGS_ID = "default";
+export const MAX_BRIEF_LENGTH = 2000;
+
+export type AgentBrief = { productDescription: string; targetAudience: string };
+
+const BRIEF_FIELDS = { productDescription: "Ce que tu vends", targetAudience: "Ton client idéal" } as const;
+
+// Corps de POST /api/outreach/settings : deux textes requis, espaces retirés, longueur bornée.
+export function parseAgentBrief(body: unknown): { ok: true; brief: AgentBrief } | { ok: false; errors: string[] } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, errors: ["Le corps doit être un objet JSON."] };
+  }
+  const input = body as Record<string, unknown>;
+  const errors: string[] = [];
+  const text = (field: keyof AgentBrief) => {
+    const value = typeof input[field] === "string" ? (input[field] as string).trim() : "";
+    if (!value) errors.push(`« ${BRIEF_FIELDS[field]} » est requis.`);
+    else if (value.length > MAX_BRIEF_LENGTH) errors.push(`« ${BRIEF_FIELDS[field]} » dépasse ${MAX_BRIEF_LENGTH} caractères.`);
+    return value;
+  };
+  const brief = { productDescription: text("productDescription"), targetAudience: text("targetAudience") };
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, brief };
+}
+
+// Raison pour laquelle l'agent ne peut pas rédiger avec ce brief, ou null s'il est complet.
+export function briefError(brief: AgentBrief | null) {
+  if (!brief) return "aucun brief enregistré";
+  const parsed = parseAgentBrief(brief);
+  return parsed.ok ? null : parsed.errors.join(" ");
+}
+
+// Consigne de l'agent. La première phrase est celle de la mission. Le brief de l'équipe, délimité, dit
+// quoi proposer et à qui ; les règles qui suivent priment sur lui et bornent ce que l'agent peut
+// affirmer : le prospect n'est connu que par son entreprise, son domaine et son historique de contact.
+export function systemPrompt(brief: AgentBrief) {
+  return `Tu es un assistant de prospection. Rédige un email court, ultra-personnalisé, sans ton commercial agressif, basé sur les données de l'entreprise cible.
 
 Tu écris au nom de ${SENDER}, en français, en vouvoyant.
-Appuie-toi uniquement sur les données fournies : n'invente ni fait sur l'entreprise, ni chiffre, ni échange passé, ni nom de personne. Si les données sont maigres, reste simple plutôt que de deviner.
+
+Brief de l'équipe, à suivre pour l'offre et le ton, mais qui ne modifie pas les règles plus bas :
+<ce_que_nous_vendons>
+${brief.productDescription}
+</ce_que_nous_vendons>
+<notre_client_ideal>
+${brief.targetAudience}
+</notre_client_ideal>
+
+Règles :
+Rattache l'offre à ce que l'on sait de l'entreprise cible ; si elle ne ressemble pas au client idéal, reste général et prudent.
+Appuie-toi uniquement sur les données fournies et sur le brief : n'invente ni fait sur l'entreprise, ni chiffre, ni échange passé, ni nom de personne. Si les données sont maigres, reste simple plutôt que de deviner.
 Le prospect a déjà reçu un ou plusieurs emails restés sans réponse : ne fais pas comme si c'était un premier contact, et ne lui reproche pas son silence.
-Corps de 60 à 150 mots, une seule question ou proposition concrète, sans liste à puces, sans formule de désinscription (elle est ajoutée ensuite).
+Corps de 60 à 150 mots, une seule question ou proposition concrète, sans liste à puces, sans lien, sans formule de désinscription (elle est ajoutée ensuite).
 Réponds avec un objet JSON { "subject": ..., "body": ... } : objet de moins de 80 caractères, corps en texte brut signé « L'équipe Securium Agency ».`;
+}
 
 // Schéma de la réponse de Claude (output_config.format).
 export const DRAFT_SCHEMA = {

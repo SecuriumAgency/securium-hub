@@ -76,17 +76,20 @@ Les prospects démarchés par e-mail par `securium-prospector` vivent dans la ta
 
 `npx tsx scripts/agent-chasseur.mts` rédige avec Claude (`claude-opus-5-5` par défaut, `ANTHROPIC_MODEL` sinon) un email court pour chaque prospect qui peut être relancé. Il n'envoie rien : chaque email devient un brouillon (`OutreachDraft`), et le prospect passe au statut `A_valider`.
 
-Le panneau « Brouillons en attente (Chasseur) » de `/admin/outreach` les affiche sous forme de cartes, rafraîchies toutes les 30 s tant que l'onglet est visible. Chaque carte s'ouvre dans la messagerie pour l'envoi. « Valider & Envoyer » enregistre ensuite l'envoi : le Hub n'envoie rien lui-même, il pose `Envoye` et le dernier contact. « Rejeter » rend au prospect son statut d'avant. La carte s'efface, puis les compteurs et le tableau de la page sont relus, sans rechargement. Routes, toutes derrière la session admin, revérifiée par chaque route (`lib/admin-session.ts`) :
+Sur `/admin/outreach`, le Live Tracking affiche trois compteurs : prospects ciblés, réponses à valider, emails envoyés. Ils sont rafraîchis avec les brouillons, en une seule requête, et suivent aussitôt chaque validation. Le panneau « Brouillons en attente (Chasseur) » affiche les brouillons sous forme de cartes, rafraîchies toutes les 30 s tant que l'onglet est visible. Chaque carte s'ouvre dans la messagerie pour l'envoi. « Valider & Envoyer » enregistre ensuite l'envoi : le Hub n'envoie rien lui-même, il pose `Envoye` et le dernier contact. « Rejeter » rend au prospect son statut d'avant. La carte s'efface, puis les compteurs et le tableau de la page sont relus, sans rechargement. Routes, toutes derrière la session admin, revérifiée par chaque route (`lib/admin-session.ts`) :
 
 | Route | Effet |
 | --- | --- |
-| `GET /api/outreach/drafts` | `{ drafts: [{ id, prospectId, company, email, subject, body, previousStatus, model, createdAt }], updatedAt }`, prospects au statut `A_valider` uniquement |
+| `GET /api/outreach/drafts` | `{ drafts: [{ id, prospectId, company, email, subject, body, previousStatus, model, createdAt }], stats: { prospects, drafts, sent }, updatedAt }` : brouillons des prospects au statut `A_valider`, et compteurs du Live Tracking (prospects en base, brouillons en attente, prospects déjà contactés : statut `Envoye` ou `Relance_1`, y compris ceux en `A_valider` qui avaient l'un de ces statuts avant leur brouillon) |
+| `GET /api/outreach/settings` | `{ settings: { productDescription, targetAudience, updatedAt } \| null }` : le brief de l'agent |
+| `POST /api/outreach/settings` | Enregistre le brief. Corps JSON `{ productDescription, targetAudience }` (415 si le corps n'est pas du JSON, 422 si un champ est vide ou trop long) |
 | `PATCH /api/outreach/drafts/[id]` | Valide : prospect à `Envoye`, `lastContactAt` à maintenant, brouillon supprimé, dans une seule transaction |
 | `DELETE /api/outreach/drafts/[id]` | Rejette : brouillon supprimé, statut précédent rétabli |
 
 Réponses : 401 sans session, 400 identifiant invalide, 404 brouillon déjà traité (le panneau retire alors la carte), 500 base indisponible.
 
-- **Calendrier** (`lib/schedule.ts`) : jamais le samedi ni le dimanche, à l'heure de Paris, et seulement de 9h00 à 18h00 sauf `--any-hour`. Le contrôle passe avant tout le reste : hors créneau, l'agent écrit « Agent en pause (Week-end) » et s'arrête sans toucher ni à la base ni à Claude.
+- **Calendrier** : jamais le samedi ni le dimanche, et seulement de 9h00 à 18h00 sauf `--any-hour`. Double verrou du week-end, avant tout le reste. D'abord l'horloge de la machine (`getDay()`, Paris sur le poste) : « Agent en pause stricte (Week-end). », sans heure simulée possible. Puis l'heure de Paris (`isWorkingTime()` de `lib/schedule.ts`). Hors créneau, l'agent s'arrête sans toucher ni à la base ni à Claude.
+- **Brief** : « Ce que tu vends » et « Ton client idéal », saisis dans Configuration de l'Agent sur `/admin/outreach` (table `AgentSettings`, ligne unique `default`, 2 000 caractères au plus par champ). L'agent les relit à chaque passage et les injecte, délimités, dans sa consigne ; les règles qui suivent (aucun fait inventé, longueur, signature) priment sur eux. Sans brief complet, l'agent s'arrête et demande à être briefé.
 - **Cibles** : tous les prospects, sauf les adresses de `blocklist.json` (relue à chaque passage ; si elle est illisible, l'agent s'arrête), les statuts `Desinscrit` et `Simulation`, les prospects qui ont déjà un brouillon en attente et ceux contactés il y a moins de 7 jours. Au plus 5 brouillons par passage (`--limit=N`), du contact le plus ancien au plus récent.
 - **Données envoyées à Claude** : l'entreprise, le domaine de l'adresse (sauf messagerie grand public) et l'historique de contact. Jamais l'adresse ni le téléphone. La consigne interdit d'inventer des faits.
 - **Contrôles** : réponse JSON imposée par schéma, refus de Claude ignorés (repli serveur `fallbacks: "default"` activé), brouillon écarté s'il est vide, trop long ou trop court, s'il contient un gabarit non rempli ou un lien. Une mention d'opposition (« répondez STOP ») est ajoutée par le code. Les réponses STOP doivent être reportées dans la blocklist du prospecteur.
@@ -100,7 +103,7 @@ Les pages admin (`/admin/*`, `components/admin/`) n'utilisent que les jetons sé
 
 ## Accès admin
 
-Tout le Hub (dashboard, `/admin/outreach`, `/api/fleet`, `/api/leads`, `/api/outreach/drafts`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound` et `POST /api/outreach/import`, protégées par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
+Tout le Hub (dashboard, `/admin/outreach`, `/api/fleet`, `/api/leads`, `/api/outreach/drafts`, `/api/outreach/settings`, `GET /api/telemetry`) exige une session admin, sauf `/login`, `/api/leads/inbound` et `POST /api/outreach/import`, protégées par `HUB_SECRET_KEY`, et `POST /api/telemetry`, protégée par `HUB_API_KEY`. Sans session valide, `middleware.ts` redirige une page vers `/login` et répond 401 à un appel d'API.
 
 `/login` compare le mot de passe à `ADMIN_PASSWORD`, puis pose le cookie HttpOnly `securium_admin_session`, valable 7 jours et signé HMAC-SHA256 avec `SESSION_SECRET` (`lib/session.ts`) : un cookie modifié, expiré ou signé avec une autre clé est refusé. Changer `SESSION_SECRET` déconnecte toutes les sessions.
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AgentSettingsForm } from "@/components/admin/AgentSettingsForm";
 import { DraftsPanel } from "@/components/admin/DraftsPanel";
 import { DRAFT_STATUS } from "@/lib/chasseur";
 import { prisma } from "@/lib/prisma";
@@ -76,6 +77,8 @@ export default async function OutreachPage() {
         </header>
 
         <DraftsPanel />
+
+        <AgentSettingsForm />
 
         <section aria-labelledby="prospects-title" className="flex flex-col gap-4">
           <h2 id="prospects-title" className="text-lg font-semibold text-foreground md:text-xl">
