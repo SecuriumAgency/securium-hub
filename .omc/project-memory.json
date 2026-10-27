@@ -42,7 +42,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "npm run build 2>&1 | grep -E \"Compiled|warn|Warn|rror\" ; echo \"build exit=${PIPESTATUS[0]}\"",
+    "buildCommand": "npm run build 2>&1 | grep -E \"Compiled|warn|Warn|rror|/api/fleet|/api/leads \"; echo \"build exit=${PIPESTATUS[0]}\"",
     "testCommand": null,
     "lintCommand": "npm run lint",
     "devCommand": "npm run dev",
@@ -117,6 +117,24 @@
   },
   "hotPaths": [
     {
+      "path": "README.md",
+      "accessCount": 31,
+      "lastAccessed": 1792822299765,
+      "type": "file"
+    },
+    {
+      "path": "scripts/migrate-outreach.mts",
+      "accessCount": 17,
+      "lastAccessed": 1792799248564,
+      "type": "file"
+    },
+    {
+      "path": "app/admin/outreach/page.tsx",
+      "accessCount": 13,
+      "lastAccessed": 1792819617758,
+      "type": "file"
+    },
+    {
       "path": "components/hub/SitePanel.tsx",
       "accessCount": 12,
       "lastAccessed": 1792782655827,
@@ -124,14 +142,32 @@
     },
     {
       "path": "app/page.tsx",
-      "accessCount": 10,
-      "lastAccessed": 1792782164040,
+      "accessCount": 12,
+      "lastAccessed": 1792794700129,
       "type": "file"
     },
     {
-      "path": "README.md",
+      "path": "components/hub/models.tsx",
       "accessCount": 10,
-      "lastAccessed": 1792782504656,
+      "lastAccessed": 1792794697101,
+      "type": "file"
+    },
+    {
+      "path": "lib/chasseur.ts",
+      "accessCount": 10,
+      "lastAccessed": 1792822020499,
+      "type": "file"
+    },
+    {
+      "path": "scripts/agent-chasseur.mts",
+      "accessCount": 9,
+      "lastAccessed": 1792819463903,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/SiteNode.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1792794659062,
       "type": "file"
     },
     {
@@ -141,21 +177,27 @@
       "type": "file"
     },
     {
-      "path": "components/hub/SiteNode.tsx",
-      "accessCount": 6,
-      "lastAccessed": 1792773486056,
-      "type": "file"
-    },
-    {
       "path": "components/hub/FleetHud.tsx",
       "accessCount": 6,
       "lastAccessed": 1792782167501,
       "type": "file"
     },
     {
-      "path": "components/hub/models.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1792773490173,
+      "path": "components/hub/AgentsPanel.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1792794701807,
+      "type": "file"
+    },
+    {
+      "path": "lib/telemetry.ts",
+      "accessCount": 6,
+      "lastAccessed": 1792794734555,
+      "type": "file"
+    },
+    {
+      "path": "lib/outreach.ts",
+      "accessCount": 6,
+      "lastAccessed": 1792799161252,
       "type": "file"
     },
     {
@@ -165,9 +207,33 @@
       "type": "file"
     },
     {
+      "path": "app/api/telemetry/route.ts",
+      "accessCount": 5,
+      "lastAccessed": 1792790072384,
+      "type": "file"
+    },
+    {
+      "path": "app/api/outreach/import/route.ts",
+      "accessCount": 5,
+      "lastAccessed": 1792799191071,
+      "type": "file"
+    },
+    {
       "path": "lib/use-fleet.ts",
       "accessCount": 4,
       "lastAccessed": 1792773387386,
+      "type": "file"
+    },
+    {
+      "path": "middleware.ts",
+      "accessCount": 4,
+      "lastAccessed": 1792796274383,
+      "type": "file"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "accessCount": 4,
+      "lastAccessed": 1792816919384,
       "type": "file"
     },
     {
@@ -183,27 +249,33 @@
       "type": "file"
     },
     {
-      "path": "components/hub/AgentsPanel.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1792782183665,
-      "type": "file"
-    },
-    {
       "path": "components/hub/LeadsTable.tsx",
       "accessCount": 3,
       "lastAccessed": 1792782479185,
       "type": "file"
     },
     {
-      "path": "components/hub/NetworkLinks.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1792773440316,
+      "path": "app/login/actions.ts",
+      "accessCount": 3,
+      "lastAccessed": 1792785252724,
       "type": "file"
     },
     {
-      "path": "app/login/actions.ts",
+      "path": "lib/use-telemetry.ts",
+      "accessCount": 3,
+      "lastAccessed": 1792794732945,
+      "type": "file"
+    },
+    {
+      "path": "tsconfig.json",
+      "accessCount": 3,
+      "lastAccessed": 1792796333494,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/NetworkLinks.tsx",
       "accessCount": 2,
-      "lastAccessed": 1792781024853,
+      "lastAccessed": 1792773440316,
       "type": "file"
     },
     {
@@ -219,9 +291,39 @@
       "type": "file"
     },
     {
-      "path": "app/api/telemetry/route.ts",
+      "path": "lib/session.ts",
       "accessCount": 2,
-      "lastAccessed": 1792782092378,
+      "lastAccessed": 1792785250951,
+      "type": "file"
+    },
+    {
+      "path": "app/login/LoginForm.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1792785254369,
+      "type": "file"
+    },
+    {
+      "path": "app/api/leads/inbound/route.ts",
+      "accessCount": 2,
+      "lastAccessed": 1792789738628,
+      "type": "file"
+    },
+    {
+      "path": "app/globals.css",
+      "accessCount": 2,
+      "lastAccessed": 1792816000054,
+      "type": "file"
+    },
+    {
+      "path": "lib/month.ts",
+      "accessCount": 2,
+      "lastAccessed": 1792821917410,
+      "type": "file"
+    },
+    {
+      "path": "app/api/fleet/route.ts",
+      "accessCount": 2,
+      "lastAccessed": 1792821920482,
       "type": "file"
     },
     {
@@ -231,21 +333,9 @@
       "type": "file"
     },
     {
-      "path": "app/api/fleet/route.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792771028525,
-      "type": "file"
-    },
-    {
       "path": "components/hub/TrafficSystem.tsx",
       "accessCount": 1,
       "lastAccessed": 1792773441654,
-      "type": "file"
-    },
-    {
-      "path": "prisma/schema.prisma",
-      "accessCount": 1,
-      "lastAccessed": 1792774303493,
       "type": "file"
     },
     {
@@ -267,39 +357,9 @@
       "type": "file"
     },
     {
-      "path": "app/api/leads/inbound/route.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792774377433,
-      "type": "file"
-    },
-    {
       "path": "eslint.config.mjs",
       "accessCount": 1,
       "lastAccessed": 1792774443166,
-      "type": "file"
-    },
-    {
-      "path": "lib/month.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792774558049,
-      "type": "file"
-    },
-    {
-      "path": "lib/session.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792780987222,
-      "type": "file"
-    },
-    {
-      "path": "app/login/LoginForm.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1792781026807,
-      "type": "file"
-    },
-    {
-      "path": "middleware.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792781030075,
       "type": "file"
     },
     {
@@ -307,18 +367,6 @@
       "accessCount": 1,
       "lastAccessed": 1792781879129,
       "type": "directory"
-    },
-    {
-      "path": "lib/telemetry.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792782066169,
-      "type": "file"
-    },
-    {
-      "path": "lib/use-telemetry.ts",
-      "accessCount": 1,
-      "lastAccessed": 1792782069583,
-      "type": "file"
     },
     {
       "path": "lib/clock.ts",
@@ -333,9 +381,39 @@
       "type": "file"
     },
     {
-      "path": "app/globals.css",
+      "path": "lib/api-key.ts",
       "accessCount": 1,
-      "lastAccessed": 1792782483099,
+      "lastAccessed": 1792789736712,
+      "type": "file"
+    },
+    {
+      "path": "components/hub/FeedPulse.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1792794655919,
+      "type": "file"
+    },
+    {
+      "path": "scripts/test-lead.mjs",
+      "accessCount": 1,
+      "lastAccessed": 1792795405601,
+      "type": "file"
+    },
+    {
+      "path": "scripts/delete-test-lead.mjs",
+      "accessCount": 1,
+      "lastAccessed": 1792795823124,
+      "type": "file"
+    },
+    {
+      "path": "lib/schedule.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792798030984,
+      "type": "file"
+    },
+    {
+      "path": "app/admin/outreach/actions.ts",
+      "accessCount": 1,
+      "lastAccessed": 1792799273053,
       "type": "file"
     }
   ],

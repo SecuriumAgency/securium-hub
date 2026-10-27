@@ -3,9 +3,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createSessionToken, SESSION_COOKIE, SESSION_MAX_AGE_S, sessionSecret } from "@/lib/session";
+import { createSessionToken, MIN_SECRET_LENGTH, SESSION_COOKIE, SESSION_MAX_AGE_S, sessionSecret } from "@/lib/session";
 
-export type LoginState = { error?: string };
+// `config` : le serveur ne peut pas vérifier de mot de passe, il manque une variable d'environnement.
+// `password` : la configuration est complète, le mot de passe saisi est refusé.
+export type LoginError = { cause: "config" | "password"; messages: string[] };
+export type LoginState = { error?: LoginError };
 
 // Comparaison en temps constant, comme pour HUB_SECRET_KEY : hacher les deux valeurs aligne leurs
 // longueurs sans révéler celle du mot de passe.
@@ -14,17 +17,36 @@ function isAdminPassword(candidate: string, expected: string) {
   return timingSafeEqual(digest(candidate), digest(expected));
 }
 
+// Affiché sur /login, page publique : nomme les variables en cause, jamais leur valeur ni leur
+// longueur. Tant qu'une variable manque, aucune connexion n'est possible, donc rien n'est révélé
+// qui aide à entrer.
+function configIssues(expected: string | undefined, secret: string | undefined) {
+  const issues: string[] = [];
+  if (!expected) issues.push("Variable ADMIN_PASSWORD manquante dans .env.local ou Vercel.");
+  if (!secret) {
+    issues.push(
+      process.env.SESSION_SECRET
+        ? `Variable SESSION_SECRET trop courte : ${MIN_SECRET_LENGTH} caractères minimum.`
+        : "Variable SESSION_SECRET manquante dans .env.local ou Vercel.",
+    );
+  }
+  return issues;
+}
+
 export async function login(_previous: LoginState, formData: FormData): Promise<LoginState> {
-  const expected = process.env.ADMIN_PASSWORD;
+  // `echo … | vercel env add` laisse un retour à la ligne final dans la valeur : on l'ignore, et une
+  // valeur faite seulement d'espaces compte comme absente.
+  const expected = process.env.ADMIN_PASSWORD?.trim();
   const secret = sessionSecret();
+  const issues = configIssues(expected, secret);
   if (!expected || !secret) {
-    console.error("[login] ADMIN_PASSWORD ou SESSION_SECRET (32 caractères minimum) n'est pas défini.");
-    return { error: "Connexion non configurée sur le serveur." };
+    console.error(`[login] Configuration incomplète : ${issues.join(" ")}`);
+    return { error: { cause: "config", messages: issues } };
   }
 
   const password = formData.get("password");
   if (typeof password !== "string" || !isAdminPassword(password, expected)) {
-    return { error: "Mot de passe incorrect." };
+    return { error: { cause: "password", messages: ["Mot de passe incorrect."] } };
   }
 
   (await cookies()).set(SESSION_COOKIE, await createSessionToken(secret), {

@@ -1,0 +1,7 @@
+{
+  "tool_name": "mcp__plugin_vercel_vercel__filter_project_envs",
+  "tool_input_preview": "{\"idOrName\":\"prj_DtLd73YJq0xYFGrSBN2qaNrnIqmz\",\"teamId\":\"team_K1mdpO6dtQjpoTnJDzuSXlt5\"}",
+  "error": "{\"error\":{\"message\":\"Vercel API request failed (403: forbidden). Not authorized: Trying to access resource under scope \\\"securium\\\". You must re-authenticate to this scope or use a token with access to this scope.\",\"recovery\":\"Call authorize_team_access (or authorize_team_sso if that is the available tool) with this teamId and show the user the returned link. After they approve team access and complete SSO if required, retry the same request with this connection. Do not ask them to reconnect.\",\"...",
+  "timestamp": "2026-10-23T22:23:03.089Z",
+  "retry_count": 1
+}

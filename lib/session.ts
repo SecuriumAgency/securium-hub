@@ -6,7 +6,7 @@ export const SESSION_COOKIE = "securium_admin_session";
 export const SESSION_MAX_AGE_S = 7 * 24 * 60 * 60;
 
 // Un secret court se casserait hors ligne à partir d'un seul cookie.
-const MIN_SECRET_LENGTH = 32;
+export const MIN_SECRET_LENGTH = 32;
 const TOKEN = /^(\d+)\.([0-9a-f]{64})$/;
 const encoder = new TextEncoder();
 

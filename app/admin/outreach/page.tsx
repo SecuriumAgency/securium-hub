@@ -3,6 +3,7 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { AgentSettingsForm } from "@/components/admin/AgentSettingsForm";
 import { DraftsPanel } from "@/components/admin/DraftsPanel";
 import { ProspectHistory } from "@/components/admin/ProspectHistory";
+import { SegmentDraftsPanel } from "@/components/admin/SegmentDraftsPanel";
 import { DRAFT_STATUS } from "@/lib/chasseur";
 import { prisma } from "@/lib/prisma";
 
@@ -78,6 +79,8 @@ export default async function OutreachPage() {
         </header>
 
         <DraftsPanel />
+
+        <SegmentDraftsPanel />
 
         <AgentSettingsForm />
 

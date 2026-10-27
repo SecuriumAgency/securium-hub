@@ -105,6 +105,14 @@ L'envoi a lieu sur le serveur qui reçoit la validation, donc sur Vercel en prod
 | `SMTP_USER`, `SMTP_PASS` | Identifiants du compte d'envoi |
 | `SMTP_FROM` | Expéditeur, par exemple `Securium Agency <contact@securium-agency.fr>`. Son adresse sert aussi à l'en-tête `List-Unsubscribe` (désinscription en un clic) |
 
+### Accroches par segment (Chasseur)
+
+`npx tsx scripts/agent-chasseur-segments.mts` lit les segments B2B du Lead Prospector (`../Securium-OS/data/leads/b2b-prospects.csv`, `--csv=<fichier>` sinon, analysés par `lib/prospects-parser.ts`). Pour chaque segment encore sans accroche, il fait rédiger par Claude un email de premier contact (`lib/ai/chasseur-generator.ts`), à partir du même brief que le Chasseur. L'email est enregistré dans `ProspectionDraft` au statut `brouillon_en_attente`. Le CSV n'a ni entreprise ni adresse : le Hub n'envoie jamais ces emails. Sur `/admin/outreach`, le panneau « Accroches par segment (Chasseur) » les affiche, avec un bouton pour les copier et un pour les supprimer. Routes, derrière la session admin : `GET /api/prospection/brouillons` (`{ drafts: [{ id, segment, sector, zone, subject, body, model, createdAt }], updatedAt }`) et `DELETE /api/prospection/brouillons/[id]` (`{ success: true }` ; 400 identifiant invalide, 404 déjà supprimée, 500 base indisponible). Le segment supprimé n'a plus d'accroche : le passage suivant de l'agent en rédige une nouvelle, sauf si la ligne du CSV est passée à `Envoyé` ou `Brouillon`.
+
+- **Exclus** : les lignes au statut `Envoyé` ou `Brouillon` (colonne `statut` facultative), les doublons (même segment, secteur et zone) et les segments qui ont déjà une accroche en base. Au plus 5 accroches par passage (`--limit=N`). `--dry-run` compte les segments à rédiger, sans appeler Claude ni écrire.
+- **Contrôles** : les mêmes que ceux du Chasseur (schéma JSON, repli en cas de refus, `draftErrors`, mention STOP ajoutée par le code).
+- **Mise en place** : après le déploiement du schéma, lancer `npx prisma db push`, sinon la table `ProspectionDraft` n'existe pas.
+
 ### Messagerie
 
 Chaque prospect a un historique d'échanges (`OutreachMessage`) : `OUTBOUND` pour un email envoyé par le Hub à la validation d'un brouillon, enregistré dans la même transaction que l'envoi ; `INBOUND` pour une réponse lue dans la boîte IMAP. Les emails antérieurs à la messagerie (registre du prospecteur) n'y figurent pas. Sur `/admin/outreach`, le bouton « Historique » de chaque prospect ouvre la conversation : plein écran sur mobile, panneau à droite à partir de `md`, vos emails à droite, ses réponses à gauche. Elle est relue toutes les 30 s tant que le panneau est ouvert (`GET /api/outreach/messages/[prospectId]`, session admin).

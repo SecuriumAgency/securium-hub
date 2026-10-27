@@ -26,6 +26,10 @@ const processStyle: Record<string, Style> = {
 // Processus planifié (cron) arrêté entre deux cycles : état normal.
 const scheduledStyle: Style = { label: "Planifié", dot: "bg-slate-500", text: "text-slate-400" };
 
+// Libellé de la ligne, quand il diffère du nom de l'agent dans le journal. Le nom reste la clé exacte
+// des événements : la ligne du Chasseur suit l'agent « Lead Prospector ».
+const AGENT_LABELS: Record<string, string> = { "Lead Prospector": "Le Chasseur - Lead Prospector" };
+
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? "s" : ""}`;
 
 // Supervision des agents de Securium-OS, posée à gauche par-dessus la scène, hors du <Canvas>.
@@ -211,7 +215,7 @@ function AgentRow({ agent, stale }: { agent: AgentTelemetry; stale: boolean }) {
           )}
           <span className={`relative inline-flex size-2 rounded-full ${style.dot}`} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-white">{agent.name}</span>
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-white">{AGENT_LABELS[agent.name] ?? agent.name}</span>
         <span className={`text-[10px] font-medium uppercase tracking-wider ${style.text}`}>{style.label}</span>
       </div>
       <p className="mt-0.5 line-clamp-2 pl-4 text-[11px] leading-snug break-words text-slate-400">

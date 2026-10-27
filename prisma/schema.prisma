@@ -101,3 +101,24 @@ model OutreachDraft {
   model          String
   createdAt      DateTime         @default(now())
 }
+
+// Accroche rédigée par l'agent Chasseur (scripts/agent-chasseur-segments.mts) pour un segment de
+// Securium-OS/data/leads/b2b-prospects.csv, écrit par le Lead Prospector : un email modèle, à adapter à
+// une entreprise du segment. Le CSV n'a ni entreprise ni adresse : le Hub n'envoie jamais ce brouillon.
+model ProspectionDraft {
+  id         String   @id @default(cuid())
+  // Segment, secteur et zone normalisés (lib/prospects-parser.ts) : un segment n'est rédigé qu'une fois.
+  segmentKey String   @unique
+  segment    String
+  sector     String
+  zone       String
+  subject    String
+  body       String
+  // brouillon_en_attente à la rédaction.
+  status     String
+  // Modèle Claude qui a rédigé l'accroche.
+  model      String
+  createdAt  DateTime @default(now())
+
+  @@index([status, createdAt])
+}
