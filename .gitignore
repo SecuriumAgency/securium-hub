@@ -47,3 +47,6 @@ next-env.d.ts
 /lib/generated/
 /prisma/*.db
 /prisma/*.db-journal
+
+# état de session oh-my-claudecode : local, non versionné
+.omc/
