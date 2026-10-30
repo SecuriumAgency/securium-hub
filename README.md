@@ -48,7 +48,9 @@ La base est un Postgres Neon (Vercel Marketplace). Prisma 7 n'accepte plus les U
 | `HUB_SECRET_KEY` | Clé partagée avec les sites ; sans elle, `/api/leads/inbound` répond 503 |
 | `DISCORD_WEBHOOK_URL` | Webhook du salon des leads ; sans lui, les leads sont enregistrés mais pas notifiés |
 
-Mise en place locale : `vercel env pull .env.local`, puis `npm install` (génère le client Prisma dans `lib/generated/prisma`). Après une modification du schéma : `npx prisma db push` (la table n'est pas mise à jour au déploiement), puis `npx prisma generate`.
+Mise en place locale : `vercel env pull .env.local`, puis `npm install` (génère le client Prisma dans `lib/generated/prisma`).
+
+Le schéma évolue par migrations versionnées (`prisma/migrations`, ligne de base `20261030100000_baseline`) ; la base n'est pas mise à jour au déploiement. Après une modification du schéma : écrire la migration sans toucher à la base (`npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script -o prisma/migrations/<horodatage>_<nom>/migration.sql`), la relire, l'appliquer avec `npx prisma migrate deploy`, puis lancer `npx prisma generate`. `migrate deploy` n'applique que les migrations en attente et ne réinitialise jamais rien. La base de `.env.local` contient les vrais prospects : pas de `prisma migrate dev`, qui propose d'effacer la base à la moindre dérive, ni de `db push`, qui crée cette dérive.
 
 Appel depuis un site, **toujours côté serveur** (route API, server action) : la clé ne doit jamais apparaître dans le code envoyé au navigateur.
 
@@ -111,7 +113,7 @@ L'envoi a lieu sur le serveur qui reçoit la validation, donc sur Vercel en prod
 
 - **Exclus** : les lignes au statut `Envoyé` ou `Brouillon` (colonne `statut` facultative), les doublons (même segment, secteur et zone) et les segments qui ont déjà une accroche en base. Au plus 5 accroches par passage (`--limit=N`). `--dry-run` compte les segments à rédiger, sans appeler Claude ni écrire.
 - **Contrôles** : les mêmes que ceux du Chasseur (schéma JSON, repli en cas de refus, `draftErrors`, mention STOP ajoutée par le code).
-- **Mise en place** : après le déploiement du schéma, lancer `npx prisma db push`, sinon la table `ProspectionDraft` n'existe pas.
+- **Mise en place** : la table `ProspectionDraft` fait partie des migrations (`npx prisma migrate deploy`).
 
 ### Messagerie
 
