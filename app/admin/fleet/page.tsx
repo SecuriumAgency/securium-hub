@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { FleetManager, type FleetRow } from "@/components/admin/FleetManager";
+import { FleetRunNote } from "@/components/admin/ScheduledRuns";
+import { FLEET_KEY, readSnapshot, type FleetSnapshot } from "@/lib/cron-store";
 import { startOfMonth } from "@/lib/month";
 import { prisma } from "@/lib/prisma";
 import { formatNumber, initialSites } from "@/lib/sites";
@@ -19,6 +21,7 @@ export const dynamic = "force-dynamic";
 export default async function FleetPage() {
   const token = process.env.VERCEL_API_TOKEN;
   const monthStart = startOfMonth(new Date());
+  const scheduled = await readSnapshot<FleetSnapshot>(FLEET_KEY);
   const [statuses, totals, monthly] = await Promise.all([
     Promise.all(
       initialSites.map((site) => (site.vercelProject && token ? fetchDeploymentStatus(site.vercelProject, token) : site.status)),
@@ -48,6 +51,7 @@ export default async function FleetPage() {
             <span className="font-semibold tabular-nums text-foreground">{rows.length}</span> sites ·{" "}
             <span className="font-semibold tabular-nums text-foreground">{formatNumber(monthTotal)}</span> leads ce mois
           </p>
+          <FleetRunNote snapshot={scheduled} />
         </header>
 
         <FleetManager rows={rows} />

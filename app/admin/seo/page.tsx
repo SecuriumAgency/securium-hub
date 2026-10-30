@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { SeoDashboard } from "@/components/admin/SeoDashboard";
+import { SeoRunTable } from "@/components/admin/ScheduledRuns";
+import { readSnapshot, SEO_KEY, type SeoSnapshot } from "@/lib/cron-store";
 import { auditSite } from "@/lib/seo/audit";
 import type { SeoAudit } from "@/lib/seo/checks";
 import { initialSites } from "@/lib/sites";
@@ -17,6 +19,7 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
   const { site: requested } = await searchParams;
   const sites = initialSites.flatMap((site) => (site.url ? [{ id: site.id, name: site.name, url: site.url }] : []));
   const selected = sites.find((site) => site.id === requested) ?? sites[0] ?? null;
+  const scheduled = await readSnapshot<SeoSnapshot>(SEO_KEY);
 
   let audit: SeoAudit | null = null;
   let error: string | null = null;
@@ -47,6 +50,8 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
           audit={audit}
           error={error}
         />
+
+        <SeoRunTable snapshot={scheduled} />
       </div>
     </main>
   );
