@@ -16,9 +16,10 @@ const PUBLIC_PATHS = new Set([
 ]);
 // En POST seulement : les rapports du daemon securium-fleet-watch, protégés par HUB_API_KEY, et
 // l'import des prospects (scripts/migrate-outreach.mts) et le lancement de workflows (/api/agents/trigger),
-// protégés par HUB_SECRET_KEY, vérifié dans la route.
+// protégés par HUB_SECRET_KEY, vérifié dans la route. Le rapport quotidien du Chief Data Officer
+// (/api/reports/upload), protégé par HUB_API_KEY, vérifié dans la route.
 // GET /api/telemetry, lu par le HUD, reste derrière la session.
-const PUBLIC_POSTS = new Set(["/api/telemetry", "/api/outreach/import", "/api/agents/trigger"]);
+const PUBLIC_POSTS = new Set(["/api/telemetry", "/api/outreach/import", "/api/agents/trigger", "/api/reports/upload"]);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

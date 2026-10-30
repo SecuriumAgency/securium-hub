@@ -157,3 +157,14 @@ model ProspectionDraft {
 
   @@index([status, createdAt])
 }
+
+// Rapport quotidien du Chief Data Officer (Securium-OS, agents/reporter), reçu par POST /api/reports/upload.
+// Un seul rapport par jour : un nouvel envoi du même jour remplace le précédent.
+model DailyReport {
+  id         String   @id @default(cuid())
+  // Jour du rapport, AAAA-MM-JJ, au fuseau de Paris.
+  date       String   @unique
+  sizeBytes  Int
+  content    Bytes
+  receivedAt DateTime @default(now())
+}
