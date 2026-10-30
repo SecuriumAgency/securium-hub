@@ -27,32 +27,63 @@ model Lead {
   @@index([siteId, createdAt])
 }
 
+// Colonnes du Kanban de prospection (/admin/outreach), libellées dans lib/kanban.ts.
+enum PipelineStatus {
+  NOUVEAU
+  ICEBREAKER_GENERE
+  EMAIL_1_ENVOYE
+  RELANCE_1
+  REPONDU
+  REFUS
+}
+
 // Prospect démarché par e-mail (securium-prospector), synchronisé par scripts/migrate-outreach.mts
 // via POST /api/outreach/import. Distinct des leads entrants : absent des métriques des sites,
 // jamais notifié sur Discord. Les désinscrits ne sont jamais importés, et sont supprimés s'ils se
 // désinscrivent après coup (RGPD).
 model OutreachProspect {
-  id            String   @id @default(cuid())
-  company       String
+  id             String            @id @default(cuid())
+  company        String
   // Adresse normalisée (minuscules) : un prospect par adresse, un réimport ne crée aucun doublon.
-  email         String   @unique
-  phone         String?
+  email          String            @unique
+  phone          String?
   // Dernier statut du registre de prospection : Envoye, Relance_1…
-  status        String
+  status         String
+  // Colonne du Kanban, déplacée à la main : le registre et l'agent Chasseur gardent `status`, en texte libre.
+  pipelineStatus PipelineStatus    @default(NOUVEAU)
+  // Premier email ouvert, premier lien cliqué.
+  emailOpenedAt  DateTime?
+  linkClickedAt  DateTime?
   // Outil d'origine, ex. "securium-prospector".
-  source        String
+  source         String
   // Premier contact, repris du registre : pas de valeur par défaut, l'historique fait foi.
-  createdAt     DateTime
+  createdAt      DateTime
   // Dernière action du registre, relance comprise.
-  lastContactAt DateTime
+  lastContactAt  DateTime
   // Entrée dans le Hub, pour la traçabilité.
-  importedAt    DateTime @default(now())
+  importedAt     DateTime          @default(now())
   // Email rédigé par l'agent Chasseur, en attente de validation : au plus un à la fois.
-  draft         OutreachDraft?
+  draft          OutreachDraft?
   // Échanges enregistrés par le Hub : emails envoyés à la validation, réponses lues en IMAP.
-  messages      OutreachMessage[]
+  messages       OutreachMessage[]
+  // Journal des envois de la séquence.
+  emailSequences EmailSequence[]
 
   @@index([createdAt])
+}
+
+// Envoi d'une séquence de prospection B2B, une ligne par email parti. Supprimé avec son prospect (purge RGPD).
+model EmailSequence {
+  id      String           @id @default(cuid())
+  leadId  String
+  lead    OutreachProspect @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  subject String
+  body    String           @db.Text
+  sentAt  DateTime         @default(now())
+  // Rang dans la séquence : 1 pour le premier email, 2 pour la première relance…
+  step    Int
+
+  @@index([leadId, sentAt])
 }
 
 // Email échangé avec un prospect : OUTBOUND, envoyé par le Hub à la validation d'un brouillon (PATCH
