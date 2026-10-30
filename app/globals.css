@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #05070d;
-  --foreground: #e2e8f0;
   /* Jetons sémantiques du design system : les composants écrivent bg-card, text-muted-foreground,
-     border-border, bg-primary/10…, jamais une couleur arbitraire. Valeurs accordées à la palette
-     du Hub (slate pour les fonds, cyan, emerald, rose, amber et violet pour les accents). */
-  --card: rgb(2 6 23 / 0.4);
+     border-border, bg-primary/10…, jamais une couleur arbitraire. Valeurs de la charte Securium Agency
+     (securium-agency.fr) : fond noir profond, cartes slate, accent ambre, gris clair pour le texte. */
+  --background: #0a0a0c;
+  --foreground: #e5e7eb;
+  --card: rgb(16 24 40 / 0.6);
   --muted: rgb(255 255 255 / 0.05);
-  --muted-foreground: #94a3b8;
+  --muted-foreground: #99a1af;
   --border: rgb(255 255 255 / 0.1);
-  --primary: #22d3ee;
-  --success: #34d399;
+  --primary: #f59e0b;
+  --success: #22c55e;
   --destructive: #fb7185;
   --warning: #fbbf24;
   /* Brouillons de l'agent Chasseur en attente de validation. */
@@ -32,12 +32,21 @@
   --color-destructive: var(--destructive);
   --color-warning: var(--warning);
   --color-draft: var(--draft);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-syne);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Titres de l'administration en Syne, la police d'affichage de la charte. Limité à la page admin : les
+   titres du Hub 3D (accueil) gardent la police de corps. */
+.admin-shell h1,
+.admin-shell h2,
+.admin-shell h3 {
+  font-family: var(--font-display), system-ui, sans-serif;
 }

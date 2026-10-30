@@ -62,7 +62,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
   const statuses = byStatus.sort((a, b) => b._count._all - a._count._all);
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-background text-foreground">
+    <main className="admin-shell min-h-dvh overflow-x-hidden bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:gap-8 md:p-6">
         <AdminNav />
 

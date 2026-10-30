@@ -1,14 +1,20 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Send, X } from "lucide-react";
+import { ExternalLink, Menu, X } from "lucide-react";
 import { useOverlay } from "./use-overlay";
 
-const LINKS = [
-  { href: "/", label: "Hub 3D" },
+type NavLink = { href: string; label: string; external?: boolean };
+
+// Prospection en premier : c'est la vue de travail. Les liens externes ouvrent un nouvel onglet. Labs et OS
+// n'ont pas d'URL publique connue : ils n'ont pas de lien tant que l'adresse n'est pas renseignée.
+const LINKS: NavLink[] = [
   { href: "/admin/outreach", label: "Prospection" },
+  { href: "/", label: "Hub 3D" },
+  { href: "https://www.securium-agency.fr", label: "Vitrine", external: true },
 ];
 
 const linkClass = (active: boolean) =>
@@ -27,17 +33,29 @@ export function AdminNav() {
   return (
     <nav aria-label="Administration" className="flex items-center justify-between gap-3">
       <Link href="/admin/outreach" className="flex min-h-[44px] min-w-0 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-primary">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-          <Send aria-hidden className="size-4" />
-        </span>
+        <Image
+          src="/logo/securium-logo.png"
+          alt=""
+          width={36}
+          height={36}
+          priority
+          className="size-9 shrink-0 rounded-xl border border-primary/20 bg-card object-contain p-1"
+        />
         <span className="truncate text-xs font-semibold uppercase tracking-[0.25em] text-primary">Securium Core</span>
       </Link>
 
       <ul className="hidden md:flex md:items-center md:gap-1">
         {LINKS.map((link) => (
           <li key={link.href}>
-            <Link href={link.href} aria-current={pathname === link.href ? "page" : undefined} className={linkClass(pathname === link.href)}>
+            <Link
+              href={link.href}
+              target={link.external ? "_blank" : undefined}
+              rel={link.external ? "noopener noreferrer" : undefined}
+              aria-current={pathname === link.href ? "page" : undefined}
+              className={linkClass(pathname === link.href)}
+            >
               {link.label}
+              {link.external && <ExternalLink aria-hidden className="ml-1 size-3.5" />}
             </Link>
           </li>
         ))}
@@ -78,11 +96,14 @@ export function AdminNav() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
+                    target={link.external ? "_blank" : undefined}
+                    rel={link.external ? "noopener noreferrer" : undefined}
                     onClick={() => setOpen(false)}
                     aria-current={pathname === link.href ? "page" : undefined}
                     className={linkClass(pathname === link.href)}
                   >
                     {link.label}
+                    {link.external && <ExternalLink aria-hidden className="ml-1 size-3.5" />}
                   </Link>
                 </li>
               ))}
