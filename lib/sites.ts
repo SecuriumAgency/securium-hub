@@ -6,6 +6,8 @@ export type SiteStatus = "online" | "offline" | "unknown";
 export type Site = {
   id: string;
   name: string;
+  // URL de production, affichée sur /admin/fleet. Facultative : un site sans URL s'affiche sans lien.
+  url?: string;
   kind: "hq" | "site";
   sector: string;
   status: SiteStatus;

@@ -7,12 +7,16 @@ import { usePathname } from "next/navigation";
 import { ExternalLink, Menu, X } from "lucide-react";
 import { useOverlay } from "./use-overlay";
 
-type NavLink = { href: string; label: string; external?: boolean };
+// Une entrée sans `href` n'a pas encore de page : elle s'affiche avec la mention « Bientôt », sans lien.
+type NavItem = { label: string; href?: string; external?: boolean };
 
-// Prospection en premier : c'est la vue de travail. Les liens externes ouvrent un nouvel onglet. Labs et OS
-// n'ont pas d'URL publique connue : ils n'ont pas de lien tant que l'adresse n'est pas renseignée.
-const LINKS: NavLink[] = [
+// Onglets de l'écosystème, dans l'ordre : la prospection d'abord, c'est la vue de travail. Les liens externes
+// ouvrent un nouvel onglet.
+const LINKS: NavItem[] = [
   { href: "/admin/outreach", label: "Prospection" },
+  { href: "/admin/fleet", label: "Parc Sites" },
+  { label: "Labs" },
+  { label: "Securium OS" },
   { href: "/", label: "Hub 3D" },
   { href: "https://www.securium-agency.fr", label: "Vitrine", external: true },
 ];
@@ -22,7 +26,33 @@ const linkClass = (active: boolean) =>
     active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
   }`;
 
-// Navigation des pages admin : tiroir à droite sur mobile (bouton burger), barre étendue à partir de md.
+function NavEntry({ item, pathname, onNavigate }: { item: NavItem; pathname: string; onNavigate?: () => void }) {
+  if (!item.href) {
+    return (
+      <span className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground">
+        {item.label}
+        <span className="rounded-md border border-border px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wider">Bientôt</span>
+      </span>
+    );
+  }
+  const active = pathname === item.href;
+  return (
+    <Link
+      href={item.href}
+      target={item.external ? "_blank" : undefined}
+      rel={item.external ? "noopener noreferrer" : undefined}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={linkClass(active)}
+    >
+      {item.label}
+      {item.external && <ExternalLink aria-hidden className="ml-1 size-3.5" />}
+    </Link>
+  );
+}
+
+// Navigation des pages admin : tiroir à droite sous lg (bouton burger), barre étendue à partir de lg. Le seuil
+// est lg : six entrées ne tiennent pas dans une barre dès md.
 export function AdminNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -44,19 +74,10 @@ export function AdminNav() {
         <span className="truncate text-xs font-semibold uppercase tracking-[0.25em] text-primary">Securium Core</span>
       </Link>
 
-      <ul className="hidden md:flex md:items-center md:gap-1">
-        {LINKS.map((link) => (
-          <li key={link.href}>
-            <Link
-              href={link.href}
-              target={link.external ? "_blank" : undefined}
-              rel={link.external ? "noopener noreferrer" : undefined}
-              aria-current={pathname === link.href ? "page" : undefined}
-              className={linkClass(pathname === link.href)}
-            >
-              {link.label}
-              {link.external && <ExternalLink aria-hidden className="ml-1 size-3.5" />}
-            </Link>
+      <ul className="hidden lg:flex lg:items-center lg:gap-1">
+        {LINKS.map((item) => (
+          <li key={item.label}>
+            <NavEntry item={item} pathname={pathname} />
           </li>
         ))}
       </ul>
@@ -66,14 +87,14 @@ export function AdminNav() {
         onClick={() => setOpen(true)}
         aria-expanded={open}
         aria-controls="admin-drawer"
-        className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg border border-border bg-muted text-foreground focus-visible:outline-2 focus-visible:outline-primary md:hidden"
+        className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg border border-border bg-muted text-foreground focus-visible:outline-2 focus-visible:outline-primary lg:hidden"
       >
         <Menu aria-hidden className="size-5" />
         <span className="sr-only">Ouvrir le menu</span>
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <div aria-hidden className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <div
             id="admin-drawer"
@@ -92,19 +113,9 @@ export function AdminNav() {
               <span className="sr-only">Fermer le menu</span>
             </button>
             <ul className="flex flex-col gap-1">
-              {LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    target={link.external ? "_blank" : undefined}
-                    rel={link.external ? "noopener noreferrer" : undefined}
-                    onClick={() => setOpen(false)}
-                    aria-current={pathname === link.href ? "page" : undefined}
-                    className={linkClass(pathname === link.href)}
-                  >
-                    {link.label}
-                    {link.external && <ExternalLink aria-hidden className="ml-1 size-3.5" />}
-                  </Link>
+              {LINKS.map((item) => (
+                <li key={item.label}>
+                  <NavEntry item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
                 </li>
               ))}
             </ul>

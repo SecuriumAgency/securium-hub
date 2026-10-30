@@ -2,6 +2,7 @@
   {
     "id": "securium-agency",
     "name": "QG Securium Agency",
+    "url": "https://hub.securium-agency.fr",
     "kind": "hq",
     "sector": "Quartier général",
     "traffic": 48210,
@@ -10,6 +11,7 @@
   {
     "id": "securium-labs",
     "name": "Securium Labs",
+    "url": "https://www.securium-labs.app",
     "kind": "site",
     "sector": "R&D et produits",
     "vercelProject": "prj_P4i9Ar09b8JlouXPowpY7M2Xwdfc",
@@ -19,6 +21,7 @@
   {
     "id": "elite-depannage-34",
     "name": "Elite Dépannage 34",
+    "url": "https://www.elite-depannage-34.fr",
     "kind": "site",
     "sector": "Dépannage local",
     "vercelProject": "prj_Fk3REZUDJZnUq0Y1CsVSN2sf8YSK",
@@ -28,6 +31,7 @@
   {
     "id": "rescue-247-uk",
     "name": "24/7 Rescue UK",
+    "url": "https://www.24-7-rescue-london.co.uk",
     "kind": "site",
     "sector": "Assistance Royaume-Uni",
     "vercelProject": "prj_dQCu13MAf5cFF2uNql3foQb7gCQD",
@@ -37,6 +41,7 @@
   {
     "id": "geoenergy-habitat",
     "name": "GeoEnergy Habitat",
+    "url": "https://www.geoenergyhabitat.com",
     "kind": "site",
     "sector": "Rénovation énergétique",
     "vercelProject": "prj_Ss6W3tJPeChiUo2Hnq1s22W8Pwkt",
