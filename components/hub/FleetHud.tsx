@@ -5,6 +5,7 @@ import { CalendarDays, Radio, Users } from "lucide-react";
 import type { SiteMetrics } from "@/lib/leads";
 import { formatNumber, type Site } from "@/lib/sites";
 import { useLeads } from "@/lib/use-leads";
+import { HubNav } from "./HubNav";
 
 export function FleetHud({ sites }: { sites: Site[] }) {
   const leads = useLeads().data;
@@ -19,6 +20,7 @@ export function FleetHud({ sites }: { sites: Site[] }) {
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-300">Securium Core</p>
           <h1 className="text-lg font-semibold text-white">Securium Hub</h1>
         </div>
+        <HubNav />
         <dl className="flex flex-wrap gap-2">
           <Kpi icon={<Radio aria-hidden className="size-3.5" />} label="Sites en ligne" value={`${onlineCount}/${sites.length}`} />
           <Kpi icon={<CalendarDays aria-hidden className="size-3.5" />} label="Leads (mois)" value={total("leadsThisMonth")} />
