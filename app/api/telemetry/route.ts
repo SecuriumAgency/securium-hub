@@ -1,26 +1,11 @@
-import { getCache } from "@vercel/functions";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAuthorized } from "@/lib/api-key";
-import { parseTelemetryReport, type TelemetryReport, type TelemetryResponse } from "@/lib/telemetry";
+import { parseTelemetryReport, type TelemetryResponse } from "@/lib/telemetry";
+import { readStoredReport, STALE_AFTER_MS, writeStoredReport, type StoredReport } from "@/lib/telemetry-store";
 
-// Dernier rapport du daemon securium-fleet-watch, gardé dans le Runtime Cache de Vercel : partagé
-// par les instances de la région, contrairement à une variable du module, et sans écriture en base
-// toutes les 10 s. Hors Vercel (npm run dev), @vercel/functions se rabat sur un cache en mémoire.
-const cache = getCache({ namespace: "telemetry" });
-// Les entrées survivent aux déploiements : changer la version si la forme de StoredReport change.
-const CACHE_KEY = "last-report:v1";
-// Le dernier rapport reste lisible une journée, marqué périmé, puis expire : GET répond alors
-// qu'il n'y a aucun rapport.
-const REPORT_TTL_S = 24 * 60 * 60;
-// Le daemon envoie un rapport toutes les 10 s : après trois manqués, le rapport est périmé.
-const STALE_AFTER_MS = 30_000;
 const MAX_BODY_CHARS = 256 * 1024;
 // Une clé courte se devinerait : en dessous, la réception reste fermée.
 const MIN_KEY_LENGTH = 32;
-
-// receivedAt est l'heure du Hub, et non generatedAt (horloge du poste) : la péremption se mesure
-// sur une seule horloge.
-type StoredReport = { receivedAt: string; report: TelemetryReport };
 
 // Appelée par le daemon securium-fleet-watch du poste, toutes les 10 s.
 // Header attendu : `Authorization: Bearer <HUB_API_KEY>`.
@@ -52,7 +37,7 @@ export async function POST(request: NextRequest) {
 
   const stored: StoredReport = { receivedAt: new Date().toISOString(), report: parsed.report };
   try {
-    await cache.set(CACHE_KEY, stored, { ttl: REPORT_TTL_S });
+    await writeStoredReport(stored);
   } catch (error) {
     console.error("[telemetry] enregistrement du rapport impossible :", error);
     return NextResponse.json({ error: "Enregistrement du rapport impossible." }, { status: 500 });
@@ -64,8 +49,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   let stored: StoredReport | null;
   try {
-    // Seul POST écrit cette clé, avec ce type.
-    stored = (await cache.get(CACHE_KEY)) as StoredReport | null;
+    stored = await readStoredReport();
   } catch (error) {
     console.error("[telemetry] lecture du rapport impossible :", error);
     return NextResponse.json({ error: "Lecture de la télémétrie impossible." }, { status: 500 });

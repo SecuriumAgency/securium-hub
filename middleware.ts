@@ -5,9 +5,10 @@ import { SESSION_COOKIE, sessionSecret, verifySessionToken } from "@/lib/session
 // satellites (sans cookie) et protégée par sa propre clé, HUB_SECRET_KEY.
 const PUBLIC_PATHS = new Set(["/login", "/api/leads/inbound"]);
 // En POST seulement : les rapports du daemon securium-fleet-watch, protégés par HUB_API_KEY, et
-// l'import des prospects (scripts/migrate-outreach.mts), protégé par HUB_SECRET_KEY.
+// l'import des prospects (scripts/migrate-outreach.mts) et le lancement de workflows (/api/agents/trigger),
+// protégés par HUB_SECRET_KEY, vérifié dans la route.
 // GET /api/telemetry, lu par le HUD, reste derrière la session.
-const PUBLIC_POSTS = new Set(["/api/telemetry", "/api/outreach/import"]);
+const PUBLIC_POSTS = new Set(["/api/telemetry", "/api/outreach/import", "/api/agents/trigger"]);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
