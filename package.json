@@ -19,9 +19,9 @@
     "@vercel/functions": "3.9.11",
     "imapflow": "2.3.0",
     "lucide-react": "^1.61.0",
-    "mailparser": "3.9.37",
+    "mailparser": "3.14.1",
     "next": "15.5.28",
-    "nodemailer": "10.0.16",
+    "nodemailer": "10.3.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "three": "^0.186.1"
@@ -42,5 +42,13 @@
     "tailwindcss": "^4",
     "tsx": "4.23.15",
     "typescript": "^5"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.32"
+    },
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
+    }
   }
 }

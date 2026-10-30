@@ -1,0 +1,7 @@
+{
+  "tool_name": "PowerShell",
+  "tool_input_preview": "{\"command\":\"node \\\"$env:TEMP\\\\claude\\\\C--Securium-Workspace-securium-hub\\\\19e0e128-d09a-4e03-8cd0-b2461224204b\\\\scratchpad\\\\smoke.cjs\\\" 2>&1 | Select-Object -Last 20; \\\"SMOKE_EXIT=$LASTEXITCODE\\\"\",\"ti...",
+  "error": "Exit code 1\nnode : Runtime Cache unavailable in this environment. Falling back to in-memory cache.\r\nAu caractère Ligne:1 : 302\r\n+ ... tch {} } }; node \"$env:TEMP\\claude\\C--Securium-Workspace-securium-hub ...\r\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (Runtime Cache u...n-memory cache.:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\nFAIL aller-retour multipart : from, sujet accentué, t...",
+  "timestamp": "2026-10-30T09:01:26.285Z",
+  "retry_count": 1
+}
