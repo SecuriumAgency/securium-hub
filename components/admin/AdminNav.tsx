@@ -17,8 +17,9 @@ const LINKS: NavItem[] = [
   { href: "/admin/fleet", label: "Parc Sites", icon: Factory },
   { href: "/admin/agents", label: "Escadron Agents", icon: Bot },
   { href: "/admin/seo", label: "Audit SEO", icon: Search },
-  { label: "Labs", icon: FlaskConical },
-  { label: "Securium OS", icon: Monitor },
+  { href: "https://www.securium-labs.app", label: "Labs", icon: FlaskConical, external: true },
+  // Les agents du poste sont regroupés sur la page des agents : l'ancre mène directement à ce groupe.
+  { href: "/admin/agents#poste", label: "Securium OS", icon: Monitor },
   { href: "/", label: "Hub 3D", icon: Box },
   { href: "https://www.securium-agency.fr", label: "Vitrine", icon: ExternalLink, external: true },
 ];

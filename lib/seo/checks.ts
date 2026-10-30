@@ -55,6 +55,20 @@ function tagsOf(html: string, name: string): Attributes[] {
   return [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, "gi"))].map((match) => attributes(match[0]));
 }
 
+const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
+// Texte tel qu'il s'affiche : « &amp; » compte pour un caractère, pas pour cinq. Sans ce décodage, la longueur
+// du title et de la description serait surestimée.
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, body: string) => {
+    if (body.startsWith("#")) {
+      const code = body[1].toLowerCase() === "x" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+    }
+    return NAMED_ENTITIES[body.toLowerCase()] ?? entity;
+  });
+}
+
 function visibleText(html: string): string {
   return html
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
@@ -90,9 +104,10 @@ function agent(id: string, name: string, checks: CheckResult[], note = ""): Agen
 
 export function auditPage(facts: PageFacts): AgentReport[] {
   const html = facts.html;
-  const title = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.replace(/\s+/g, " ").trim() ?? "";
+  const title = decodeEntities(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.replace(/\s+/g, " ").trim() ?? "");
   const meta = tagsOf(html, "meta");
-  const metaNamed = (name: string) => meta.find((item) => item.name?.toLowerCase() === name)?.content?.trim() ?? "";
+  const metaNamed = (name: string) =>
+    decodeEntities(meta.find((item) => item.name?.toLowerCase() === name)?.content?.trim() ?? "");
   const description = metaNamed("description");
   const viewport = metaNamed("viewport");
   const noindex = facts.noindexHeader || /noindex/i.test(metaNamed("robots"));
@@ -105,8 +120,14 @@ export function auditPage(facts: PageFacts): AgentReport[] {
   const imagesWithoutSize = images.filter((image) => image.width === undefined || image.height === undefined).length;
 
   const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1] ?? "";
+  // Un script `nomodule` ne s'exécute que dans les navigateurs sans modules ES : il ne retarde pas le rendu des autres.
   const blockingScripts = tagsOf(head, "script").filter(
-    (script) => script.src !== undefined && script.async === undefined && script.defer === undefined && script.type !== "module",
+    (script) =>
+      script.src !== undefined &&
+      script.async === undefined &&
+      script.defer === undefined &&
+      script.type !== "module" &&
+      script.nomodule === undefined,
   ).length;
 
   const jsonLd = [...html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map(

@@ -59,7 +59,7 @@ export function AgentsControlRoom({
         const groupCards = cards.filter((card) => card.agent.kind === group.kind);
         if (groupCards.length === 0) return null;
         return (
-          <section key={group.kind} aria-labelledby={`group-${group.kind}`} className="flex flex-col gap-4">
+          <section key={group.kind} id={group.kind} aria-labelledby={`group-${group.kind}`} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <h2 id={`group-${group.kind}`} className="text-lg font-semibold text-foreground md:text-xl">
                 {group.title}
