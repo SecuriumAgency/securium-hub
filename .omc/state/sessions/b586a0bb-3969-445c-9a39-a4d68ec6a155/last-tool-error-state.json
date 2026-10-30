@@ -1,0 +1,7 @@
+{
+  "tool_name": "mcp__ccd_turn__update_plan",
+  "tool_input_preview": "{\"items\":[{\"content\":\"Audit auth : middleware, routes outreach, server actions\",\"status\":\"completed\"},{\"content\":\"Baseline tsc --noEmit et npm run build avant modifs\",\"status\":\"in_progress\"},{\"content...",
+  "error": "items also needs \"scope\": \"first_task\", \"continuation\" or \"new_task\" — what this request is to the session. Send the same items again with it.",
+  "timestamp": "2026-10-30T11:12:50.621Z",
+  "retry_count": 1
+}

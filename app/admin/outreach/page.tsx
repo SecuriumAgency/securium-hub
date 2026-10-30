@@ -3,6 +3,7 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { AgentSettingsForm } from "@/components/admin/AgentSettingsForm";
 import { DraftsPanel } from "@/components/admin/DraftsPanel";
 import { KanbanBoard } from "@/components/admin/KanbanBoard";
+import { OutreachTabs, type OutreachView } from "@/components/admin/OutreachTabs";
 import { ProspectHistory } from "@/components/admin/ProspectHistory";
 import { SegmentDraftsPanel } from "@/components/admin/SegmentDraftsPanel";
 import { DRAFT_STATUS } from "@/lib/chasseur";
@@ -47,9 +48,11 @@ function PhoneLink({ phone }: { phone: string | null }) {
   );
 }
 
-// Prospects démarchés (scripts/migrate-outreach.mts) et brouillons de l'agent Chasseur à valider.
-// Mobile d'abord : cartes empilées, tableau à partir de md.
-export default async function OutreachPage() {
+// Prospection : le Kanban d'abord, puis le suivi (Live Tracking, brouillons et icebreakers, accroches, réglages
+// et registre). Mobile d'abord : cartes empilées, tableau à partir de md.
+export default async function OutreachPage({ searchParams }: { searchParams: Promise<{ vue?: string }> }) {
+  const { vue } = await searchParams;
+  const initialView: OutreachView = vue === "suivi" ? "suivi" : "kanban";
   const [prospects, total, byStatus, leads] = await Promise.all([
     prisma.outreachProspect.findMany({ orderBy: { lastContactAt: "desc" }, take: MAX_ROWS }),
     prisma.outreachProspect.count(),
@@ -82,87 +85,97 @@ export default async function OutreachPage() {
           )}
         </header>
 
-        <DraftsPanel />
-
-        <KanbanBoard leads={leads} />
-        {total > MAX_KANBAN_LEADS && (
-          <p className="text-xs text-muted-foreground">
-            {MAX_KANBAN_LEADS} prospects au Kanban sur {total}, du premier contact le plus récent au plus ancien.
-          </p>
-        )}
-
-        <SegmentDraftsPanel />
-
-        <AgentSettingsForm />
-
-        <section aria-labelledby="prospects-title" className="flex flex-col gap-4">
-          <h2 id="prospects-title" className="text-lg font-semibold text-foreground md:text-xl">
-            Prospects démarchés
-          </h2>
-
-          {total === 0 ? (
-            <p className="rounded-xl border border-border bg-card p-4 text-center text-sm text-muted-foreground md:p-6">
-              Aucun prospect importé. L&apos;historique s&apos;importe avec{" "}
-              <span className="break-words font-mono text-foreground">node scripts/migrate-outreach.mts --send</span>.
-            </p>
-          ) : (
+        <OutreachTabs
+          initialView={initialView}
+          kanban={
             <>
-              <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card md:hidden">
-                {prospects.map((prospect) => (
-                  <ProspectItem key={prospect.id} prospect={prospect} />
-                ))}
-              </ul>
-
-              <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
-                <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Prospects démarchés, du dernier contact le plus récent au plus ancien</caption>
-                  <thead className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      {["Premier contact", "Dernier contact", "Entreprise", "Email", "Téléphone", "Statut", "Source", "Échanges"].map((column) => (
-                        <th key={column} scope="col" className="px-4 py-3 font-medium">
-                          {column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {prospects.map((prospect) => (
-                      <tr key={prospect.id} className="transition-colors hover:bg-muted">
-                        <td className="whitespace-nowrap px-4 tabular-nums text-foreground">{dateFormat.format(prospect.createdAt)}</td>
-                        <td className="whitespace-nowrap px-4 tabular-nums text-muted-foreground">{dateFormat.format(prospect.lastContactAt)}</td>
-                        <td className="max-w-56 truncate px-4 font-medium text-foreground" title={prospect.company}>
-                          {prospect.company}
-                        </td>
-                        <td className="max-w-56 px-4" title={prospect.email}>
-                          <a href={`mailto:${prospect.email}`} className={contactLink}>
-                            {prospect.email}
-                          </a>
-                        </td>
-                        <td className="whitespace-nowrap px-4">
-                          <PhoneLink phone={prospect.phone} />
-                        </td>
-                        <td className="whitespace-nowrap px-4">
-                          <StatusBadge status={prospect.status} />
-                        </td>
-                        <td className="max-w-40 truncate px-4 text-muted-foreground" title={prospect.source}>
-                          {prospect.source}
-                        </td>
-                        <td className="px-4 py-2">
-                          <ProspectHistory prospectId={prospect.id} company={prospect.company} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <KanbanBoard leads={leads} />
+              {total > MAX_KANBAN_LEADS && (
+                <p className="text-xs text-muted-foreground">
+                  {MAX_KANBAN_LEADS} prospects au Kanban sur {total}, du premier contact le plus récent au plus ancien.
+                </p>
+              )}
             </>
-          )}
-          {total > MAX_ROWS && (
-            <p className="text-xs text-muted-foreground">
-              {MAX_ROWS} prospects affichés sur {total}, du contact le plus récent au plus ancien.
-            </p>
-          )}
-        </section>
+          }
+          suivi={
+            <>
+              <DraftsPanel />
+
+              <SegmentDraftsPanel />
+
+              <AgentSettingsForm />
+
+              <section aria-labelledby="prospects-title" className="flex flex-col gap-4">
+                <h2 id="prospects-title" className="text-lg font-semibold text-foreground md:text-xl">
+                  Prospects démarchés
+                </h2>
+
+                {total === 0 ? (
+                  <p className="rounded-xl border border-border bg-card p-4 text-center text-sm text-muted-foreground md:p-6">
+                    Aucun prospect importé. L&apos;historique s&apos;importe avec{" "}
+                    <span className="break-words font-mono text-foreground">node scripts/migrate-outreach.mts --send</span>.
+                  </p>
+                ) : (
+                  <>
+                    <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card md:hidden">
+                      {prospects.map((prospect) => (
+                        <ProspectItem key={prospect.id} prospect={prospect} />
+                      ))}
+                    </ul>
+
+                    <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
+                      <table className="w-full text-left text-sm">
+                        <caption className="sr-only">Prospects démarchés, du dernier contact le plus récent au plus ancien</caption>
+                        <thead className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                          <tr>
+                            {["Premier contact", "Dernier contact", "Entreprise", "Email", "Téléphone", "Statut", "Source", "Échanges"].map((column) => (
+                              <th key={column} scope="col" className="px-4 py-3 font-medium">
+                                {column}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {prospects.map((prospect) => (
+                            <tr key={prospect.id} className="transition-colors hover:bg-muted">
+                              <td className="whitespace-nowrap px-4 tabular-nums text-foreground">{dateFormat.format(prospect.createdAt)}</td>
+                              <td className="whitespace-nowrap px-4 tabular-nums text-muted-foreground">{dateFormat.format(prospect.lastContactAt)}</td>
+                              <td className="max-w-56 truncate px-4 font-medium text-foreground" title={prospect.company}>
+                                {prospect.company}
+                              </td>
+                              <td className="max-w-56 px-4" title={prospect.email}>
+                                <a href={`mailto:${prospect.email}`} className={contactLink}>
+                                  {prospect.email}
+                                </a>
+                              </td>
+                              <td className="whitespace-nowrap px-4">
+                                <PhoneLink phone={prospect.phone} />
+                              </td>
+                              <td className="whitespace-nowrap px-4">
+                                <StatusBadge status={prospect.status} />
+                              </td>
+                              <td className="max-w-40 truncate px-4 text-muted-foreground" title={prospect.source}>
+                                {prospect.source}
+                              </td>
+                              <td className="px-4 py-2">
+                                <ProspectHistory prospectId={prospect.id} company={prospect.company} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+                {total > MAX_ROWS && (
+                  <p className="text-xs text-muted-foreground">
+                    {MAX_ROWS} prospects affichés sur {total}, du contact le plus récent au plus ancien.
+                  </p>
+                )}
+              </section>
+            </>
+          }
+        />
       </div>
     </main>
   );

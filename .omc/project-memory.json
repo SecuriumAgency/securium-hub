@@ -42,7 +42,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "npm run build",
+    "buildCommand": "SCR=\"/c/Users/UTILIS~1/AppData/Local/Temp/claude/C--Securium-Workspace-securium-hub/b586a0bb-3969-445c-9a39-a4d68ec6a155/scratchpad\" && timeout 540 npm run build > \"$SCR/build-ui.log\" 2>&1; echo \"BUILD_EXIT=$?\"; grep -E \"Compiled|Generating static pages \\(13|error|Error|Type error|Failed\" \"$SCR/build-ui.log\" | head -20; grep -A3 \"outreach\" \"$SCR/build-ui.log\" | head -8",
     "testCommand": null,
     "lintCommand": "npm run lint",
     "devCommand": "npm run dev",
@@ -156,14 +156,56 @@
   "hotPaths": [
     {
       "path": "",
-      "accessCount": 4,
-      "lastAccessed": 1793350584985,
+      "accessCount": 5,
+      "lastAccessed": 1793358655519,
       "type": "directory"
+    },
+    {
+      "path": "app/api/outreach/import/route.ts",
+      "accessCount": 5,
+      "lastAccessed": 1793359050590,
+      "type": "file"
+    },
+    {
+      "path": "app/api/outreach/drafts/[id]/route.ts",
+      "accessCount": 5,
+      "lastAccessed": 1793359069635,
+      "type": "file"
     },
     {
       "path": "package.json",
       "accessCount": 4,
       "lastAccessed": 1793350797777,
+      "type": "file"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "accessCount": 4,
+      "lastAccessed": 1793358988574,
+      "type": "file"
+    },
+    {
+      "path": "lib/chasseur.ts",
+      "accessCount": 4,
+      "lastAccessed": 1793359023101,
+      "type": "file"
+    },
+    {
+      "path": "components/admin/KanbanBoard.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1793363823783,
+      "type": "file"
+    },
+    {
+      "path": "components/admin/DraftsPanel.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1793363833475,
+      "type": "directory"
+    },
+    {
+      "path": "lib/outreach-leads.ts",
+      "accessCount": 3,
+      "lastAccessed": 1793359032226,
       "type": "file"
     },
     {
@@ -173,15 +215,57 @@
       "type": "directory"
     },
     {
-      "path": "eslint.config.mjs",
-      "accessCount": 1,
-      "lastAccessed": 1793350275984,
+      "path": "scripts",
+      "accessCount": 2,
+      "lastAccessed": 1793351176304,
+      "type": "directory"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 2,
+      "lastAccessed": 1793351507299,
+      "type": "file"
+    },
+    {
+      "path": "lib/kanban.ts",
+      "accessCount": 2,
+      "lastAccessed": 1793358664402,
+      "type": "file"
+    },
+    {
+      "path": "lib/mail.ts",
+      "accessCount": 2,
+      "lastAccessed": 1793358697592,
       "type": "file"
     },
     {
       "path": "tsconfig.json",
-      "accessCount": 1,
-      "lastAccessed": 1793350276739,
+      "accessCount": 2,
+      "lastAccessed": 1793358898858,
+      "type": "file"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "accessCount": 2,
+      "lastAccessed": 1793358899322,
+      "type": "file"
+    },
+    {
+      "path": "lib/outreach.ts",
+      "accessCount": 2,
+      "lastAccessed": 1793359017526,
+      "type": "file"
+    },
+    {
+      "path": "app/admin/outreach/page.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1793363805620,
+      "type": "file"
+    },
+    {
+      "path": "app/globals.css",
+      "accessCount": 2,
+      "lastAccessed": 1793363829146,
       "type": "file"
     },
     {
@@ -203,15 +287,81 @@
       "type": "directory"
     },
     {
-      "path": "scripts",
+      "path": "components/admin/ProspectHistory.tsx",
       "accessCount": 1,
-      "lastAccessed": 1793350282274,
-      "type": "directory"
+      "lastAccessed": 1793351175327,
+      "type": "file"
     },
     {
-      "path": "lib/mail.ts",
+      "path": "app/admin/outreach/actions.ts",
       "accessCount": 1,
-      "lastAccessed": 1793350584463,
+      "lastAccessed": 1793351499933,
+      "type": "file"
+    },
+    {
+      "path": "middleware.ts",
+      "accessCount": 1,
+      "lastAccessed": 1793358662263,
+      "type": "file"
+    },
+    {
+      "path": "app/api/outreach/drafts/route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1793358697100,
+      "type": "file"
+    },
+    {
+      "path": "lib/schedule.ts",
+      "accessCount": 1,
+      "lastAccessed": 1793358698099,
+      "type": "file"
+    },
+    {
+      "path": "lib/prospects-parser.ts",
+      "accessCount": 1,
+      "lastAccessed": 1793358744254,
+      "type": "file"
+    },
+    {
+      "path": "lib/outreach-ai.ts",
+      "accessCount": 1,
+      "lastAccessed": 1793359081785,
+      "type": "file"
+    },
+    {
+      "path": "scripts/agent-icebreakers.mts",
+      "accessCount": 1,
+      "lastAccessed": 1793359110943,
+      "type": "file"
+    },
+    {
+      "path": "scripts/agent-chasseur.mts",
+      "accessCount": 1,
+      "lastAccessed": 1793359113088,
+      "type": "file"
+    },
+    {
+      "path": "components/admin/AdminNav.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1793363694837,
+      "type": "file"
+    },
+    {
+      "path": "app/layout.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1793363701797,
+      "type": "file"
+    },
+    {
+      "path": "components/admin/SegmentDraftsPanel.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1793363702173,
+      "type": "file"
+    },
+    {
+      "path": "components/admin/OutreachTabs.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1793363783575,
       "type": "file"
     }
   ],

@@ -17,7 +17,7 @@ const columnAccent: Record<PipelineStatus, string> = {
 
 type Move = { id: string; status: PipelineStatus };
 
-// Suivi des prospects B2B, une colonne par statut, sur surface claire (.surface-light). Mobile d'abord :
+// Pipeline des prospects B2B, une colonne par statut, sur les tons sombres du Hub. Mobile d'abord :
 // colonnes empilées, puis côte à côte à partir de md, avec défilement horizontal, six ne tenant pas dans la
 // largeur du panneau. Un déplacement s'affiche aussitôt ; s'il échoue, la carte revient d'elle-même dans sa
 // colonne et l'erreur s'affiche.
@@ -49,7 +49,7 @@ export function KanbanBoard({ leads }: { leads: KanbanLead[] }) {
   return (
     <section
       aria-labelledby="kanban-title"
-      className="surface-light flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-background p-4 text-foreground shadow-sm md:p-6"
+      className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-4 text-foreground md:p-6"
     >
       <div className="flex flex-col gap-1">
         <h2 id="kanban-title" className="text-lg font-semibold md:text-xl">
@@ -98,7 +98,7 @@ export function KanbanBoard({ leads }: { leads: KanbanLead[] }) {
 // Carte d'un prospect : le registre ne connaît que l'entreprise et son adresse, pas de nom de contact.
 function LeadCard({ lead, disabled, onMove }: { lead: KanbanLead; disabled: boolean; onMove: (status: PipelineStatus) => void }) {
   return (
-    <li className="flex min-w-0 flex-col gap-1 rounded-lg bg-card p-3 shadow-sm transition-shadow hover:shadow-md">
+    <li className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/40">
       <h4 className="break-words text-sm font-medium text-foreground">{lead.company}</h4>
       <a href={`mailto:${lead.email}`} title={lead.email} className="flex min-h-[44px] items-center text-xs text-muted-foreground transition-colors hover:text-primary">
         <span className="truncate">{lead.email}</span>

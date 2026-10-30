@@ -97,7 +97,7 @@ export function DraftsPanel() {
     <section aria-labelledby="drafts-title" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 id="drafts-title" className="flex flex-wrap items-center gap-2 text-lg font-semibold text-foreground md:text-xl">
-          Brouillons en attente (Chasseur)
+          Brouillons en attente (Chasseur et icebreakers)
           {drafts && (
             <span className="rounded-full border border-draft/30 bg-draft/10 px-2.5 py-0.5 text-xs font-medium tabular-nums text-draft">
               {drafts.length}
