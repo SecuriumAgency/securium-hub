@@ -3,7 +3,9 @@
 // a un score `null` et n'entre pas dans la moyenne : le rapport dit ce qui n'a pas été mesuré.
 // Fonctions pures : la récupération des pages est dans lib/seo/audit.ts.
 
-export type CheckResult = { id: string; label: string; passed: boolean; detail: string; advice: string };
+// `notApplicable` : critère de contenu sans objet sur une page d'accès restreint. Il n'entre ni dans la moyenne,
+// ni dans les recommandations, et n'est jamais affiché comme réussi.
+export type CheckResult = { id: string; label: string; passed: boolean; detail: string; advice: string; notApplicable?: boolean };
 
 export type AgentReport = {
   id: string;
@@ -30,6 +32,8 @@ export type SeoAudit = {
 // Ce que la récupération du site apporte. `null` : la requête a échoué (réseau, délai dépassé).
 export type PageFacts = {
   url: string;
+  // Adresse après redirections : /login pour le QG, dont l'accueil redirige vers la connexion.
+  finalUrl: string;
   pageStatus: number | null;
   html: string;
   noindexHeader: boolean;
@@ -92,18 +96,41 @@ function check(id: string, label: string, passed: boolean, detail: string, advic
 }
 
 function agent(id: string, name: string, checks: CheckResult[], note = ""): AgentReport {
-  const passed = checks.filter((item) => item.passed).length;
+  const applicable = checks.filter((item) => !item.notApplicable);
+  const passed = applicable.filter((item) => item.passed).length;
   return {
     id,
     name,
-    score: checks.length === 0 ? null : Math.round((passed / checks.length) * 100),
+    score: applicable.length === 0 ? null : Math.round((passed / applicable.length) * 100),
     note,
     checks,
   };
 }
 
+// Pages d'accès restreint : la connexion, l'administration, et toute page qui demande un mot de passe.
+const PRIVATE_PATHS = ["/login", "/admin"];
+
+function isPrivatePage(facts: PageFacts): boolean {
+  const path = new URL(facts.finalUrl || facts.url).pathname;
+  const onPrivatePath = PRIVATE_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  return onPrivatePath || /<input\b[^>]*\btype\s*=\s*["']?password\b/i.test(facts.html);
+}
+
+// Critère marketing (contenu, maillage, balisage, appel à l'action) : sur une page privée, il est marqué non
+// applicable et la mesure reste visible dans le détail.
+function contentCheck(result: CheckResult, privatePage: boolean): CheckResult {
+  if (!privatePage) return result;
+  return {
+    ...result,
+    passed: false,
+    notApplicable: true,
+    detail: `${result.detail} · non applicable sur une page d’accès restreint`,
+  };
+}
+
 export function auditPage(facts: PageFacts): AgentReport[] {
   const html = facts.html;
+  const privatePage = isPrivatePage(facts);
   const title = decodeEntities(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.replace(/\s+/g, " ").trim() ?? "");
   const meta = tagsOf(html, "meta");
   const metaNamed = (name: string) =>
@@ -178,31 +205,43 @@ export function auditPage(facts: PageFacts): AgentReport[] {
     agent("semantic", "Audit sémantique et mots-clés", [
       check("title", "Balise title", title !== "", title ? `« ${title} »` : "absente", "Ajouter une balise title qui décrit la page."),
       check("h1", "Un seul h1", h1Count === 1, `${h1Count} h1`, "Garder exactement un h1 par page, porteur du sujet principal."),
-      check("words", "Au moins 300 mots", words >= 300, `${words} mots visibles`, "Étoffer le contenu utile de la page : 300 mots au minimum."),
+      contentCheck(
+        check("words", "Au moins 300 mots", words >= 300, `${words} mots visibles`, "Étoffer le contenu utile de la page : 300 mots au minimum."),
+        privatePage,
+      ),
     ]),
     agent("linking", "Maillage interne", [
-      check(
-        "internal-links",
-        "Au moins 5 liens internes",
-        internalLinks >= 5,
-        `${internalLinks} lien(s) interne(s) distinct(s)`,
-        "Relier la page aux pages de services et de contact.",
+      contentCheck(
+        check(
+          "internal-links",
+          "Au moins 5 liens internes",
+          internalLinks >= 5,
+          `${internalLinks} lien(s) interne(s) distinct(s)`,
+          "Relier la page aux pages de services et de contact.",
+        ),
+        privatePage,
       ),
     ]),
     agent("schema", "Balisage Schema.org", [
-      check(
-        "jsonld-present",
-        "Bloc JSON-LD présent",
-        jsonLd.length > 0,
-        `${jsonLd.length} bloc(s)`,
-        "Ajouter un bloc JSON-LD (LocalBusiness ou Organization).",
+      contentCheck(
+        check(
+          "jsonld-present",
+          "Bloc JSON-LD présent",
+          jsonLd.length > 0,
+          `${jsonLd.length} bloc(s)`,
+          "Ajouter un bloc JSON-LD (LocalBusiness ou Organization).",
+        ),
+        privatePage,
       ),
-      check(
-        "jsonld-valid",
-        "JSON-LD valide",
-        jsonLd.length > 0 && jsonLdValid === jsonLd.length,
-        `${jsonLdValid}/${jsonLd.length} bloc(s) lisibles`,
-        "Corriger la syntaxe JSON des blocs JSON-LD.",
+      contentCheck(
+        check(
+          "jsonld-valid",
+          "JSON-LD valide",
+          jsonLd.length > 0 && jsonLdValid === jsonLd.length,
+          `${jsonLdValid}/${jsonLd.length} bloc(s) lisibles`,
+          "Corriger la syntaxe JSON des blocs JSON-LD.",
+        ),
+        privatePage,
       ),
     ]),
     agent("meta", "Meta titles et descriptions", [
@@ -310,12 +349,15 @@ export function auditPage(facts: PageFacts): AgentReport[] {
         hasContactChannel ? "tel, mailto ou formulaire" : "aucun",
         "Ajouter un lien tel: ou un formulaire de contact visible.",
       ),
-      check(
-        "cta",
-        "Appel à l’action explicite",
-        hasCta,
-        hasCta ? "présent" : "absent",
-        "Écrire un appel à l’action (devis, contact, rappel) dans la première partie de la page.",
+      contentCheck(
+        check(
+          "cta",
+          "Appel à l’action explicite",
+          hasCta,
+          hasCta ? "présent" : "absent",
+          "Écrire un appel à l’action (devis, contact, rappel) dans la première partie de la page.",
+        ),
+        privatePage,
       ),
     ]),
   ];
@@ -327,7 +369,9 @@ export function summarize(site: { id: string; name: string; url: string }, agent
   const score = measured.length === 0 ? 0 : Math.round(measured.reduce((sum, item) => sum + (item.score ?? 0), 0) / measured.length);
   const recommendations = [
     ...new Set(
-      agents.flatMap((item) => item.checks.filter((check) => !check.passed).map((check) => `${item.name} : ${check.advice}`)),
+      agents.flatMap((item) =>
+        item.checks.filter((check) => !check.passed && !check.notApplicable).map((check) => `${item.name} : ${check.advice}`),
+      ),
     ),
   ].slice(0, 20);
   return {

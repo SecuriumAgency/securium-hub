@@ -7,7 +7,7 @@ const USER_AGENT = "SecuriumHubAudit/1.0";
 
 export type FleetSite = { id: string; name: string; url: string };
 
-type Fetched = { status: number | null; text: string; headers: Headers | null };
+type Fetched = { status: number | null; text: string; headers: Headers | null; url: string };
 
 async function fetchText(url: string): Promise<Fetched> {
   try {
@@ -18,9 +18,9 @@ async function fetchText(url: string): Promise<Fetched> {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const text = (await response.text()).slice(0, MAX_CHARS);
-    return { status: response.status, text, headers: response.headers };
+    return { status: response.status, text, headers: response.headers, url: response.url };
   } catch {
-    return { status: null, text: "", headers: null };
+    return { status: null, text: "", headers: null, url: "" };
   }
 }
 
@@ -35,6 +35,7 @@ export async function auditSite(site: FleetSite): Promise<SeoAudit> {
   ]);
   const facts: PageFacts = {
     url: page.href,
+    finalUrl: html.url || page.href,
     pageStatus: html.status,
     html: html.text,
     noindexHeader: /noindex/i.test(html.headers?.get("x-robots-tag") ?? ""),

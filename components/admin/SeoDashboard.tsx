@@ -14,7 +14,8 @@ const dateFormat = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", 
 const scoreTone = (score: number) => (score >= 80 ? "text-success" : score >= 50 ? "text-warning" : "text-destructive");
 
 function AgentCard({ agent }: { agent: AgentReport }) {
-  const passed = agent.checks.filter((item) => item.passed).length;
+  const applicable = agent.checks.filter((item) => !item.notApplicable);
+  const passed = applicable.filter((item) => item.passed).length;
   return (
     <li className="flex min-w-0 flex-col gap-2 rounded-xl border border-white/10 bg-card/40 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -25,20 +26,26 @@ function AgentCard({ agent }: { agent: AgentReport }) {
         <p
           className={`shrink-0 text-lg font-semibold tabular-nums ${agent.score === null ? "text-muted-foreground" : scoreTone(agent.score)}`}
         >
-          {agent.score === null ? "Non mesuré" : `${agent.score}/100`}
+          {agent.score === null
+            ? applicable.length === 0 && agent.checks.length > 0
+              ? "Non applicable"
+              : "Non mesuré"
+            : `${agent.score}/100`}
         </p>
       </div>
       {agent.checks.length > 0 && (
         <details>
           <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-sm text-primary">
-            Contrôles réussis : {passed}/{agent.checks.length}
+            {applicable.length > 0
+              ? `Contrôles réussis : ${passed}/${applicable.length}`
+              : `Contrôles non applicables : ${agent.checks.length}`}
           </summary>
           <ul className="mt-2 flex flex-col gap-2 text-sm">
             {agent.checks.map((check) => (
               <li key={check.id} className="flex flex-col gap-0.5">
-                <span className={check.passed ? "text-success" : "text-destructive"}>
-                  <span aria-hidden>{check.passed ? "✓" : "✗"} </span>
-                  <span className="sr-only">{check.passed ? "Réussi : " : "Échoué : "}</span>
+                <span className={check.notApplicable ? "text-muted-foreground" : check.passed ? "text-success" : "text-destructive"}>
+                  <span aria-hidden>{check.notApplicable ? "–" : check.passed ? "✓" : "✗"} </span>
+                  <span className="sr-only">{check.notApplicable ? "Non applicable : " : check.passed ? "Réussi : " : "Échoué : "}</span>
                   {check.label}
                 </span>
                 <span className="break-words text-xs text-muted-foreground">{check.detail}</span>
@@ -64,6 +71,7 @@ export function SeoDashboard({
   audit: SeoAudit | null;
   error: string | null;
 }) {
+  const restricted = audit?.agents.some((agent) => agent.checks.some((check) => check.notApplicable)) ?? false;
   return (
     <div className="flex flex-col gap-6">
       <form method="get" action="/admin/seo" className={`${glass} flex flex-col gap-3 md:flex-row md:items-end`}>
@@ -108,6 +116,11 @@ export function SeoDashboard({
                 {audit.coverage.measured} agent(s) sur {audit.coverage.total} mesuré(s) · audité le{" "}
                 {dateFormat.format(new Date(audit.measuredAt))}
               </p>
+              {restricted && (
+                <p className="text-xs text-muted-foreground">
+                  Page d’accès restreint : les critères de contenu ne s’appliquent pas et sortent du score.
+                </p>
+              )}
             </div>
           </section>
 
