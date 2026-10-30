@@ -5,7 +5,15 @@ import { SESSION_COOKIE, sessionSecret, verifySessionToken } from "@/lib/session
 // satellites (sans cookie) et protégée par sa propre clé, HUB_SECRET_KEY.
 // Les tâches planifiées (Vercel Cron) appellent les routes /api/cron/* sans session : chaque route vérifie
 // CRON_SECRET. Vercel les appelle en GET.
-const PUBLIC_PATHS = new Set(["/login", "/api/leads/inbound", "/api/cron/fleet-status", "/api/cron/seo-audit"]);
+// robots.txt et sitemap.xml se lisent sans session : les moteurs de recherche les demandent sans cookie.
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/api/leads/inbound",
+  "/api/cron/fleet-status",
+  "/api/cron/seo-audit",
+]);
 // En POST seulement : les rapports du daemon securium-fleet-watch, protégés par HUB_API_KEY, et
 // l'import des prospects (scripts/migrate-outreach.mts) et le lancement de workflows (/api/agents/trigger),
 // protégés par HUB_SECRET_KEY, vérifié dans la route.

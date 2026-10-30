@@ -3,7 +3,9 @@ import { LockKeyhole } from "lucide-react";
 import { LoginForm } from "./LoginForm";
 
 export const metadata: Metadata = {
-  title: "Connexion · Securium Core",
+  title: "Connexion au hub Securium · QG de l’agence",
+  description:
+    "Accès réservé à l’équipe Securium Agency : flotte de sites, leads et agents, depuis le centre de commandement 3D du hub.",
 };
 
 export default function LoginPage() {
