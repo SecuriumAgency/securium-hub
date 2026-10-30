@@ -115,6 +115,14 @@ L'envoi a lieu sur le serveur qui reçoit la validation, donc sur Vercel en prod
 - **Contrôles** : les mêmes que ceux du Chasseur (schéma JSON, repli en cas de refus, `draftErrors`, mention STOP ajoutée par le code).
 - **Mise en place** : la table `ProspectionDraft` fait partie des migrations (`npx prisma migrate deploy`).
 
+### Kanban de prospection
+
+Sur `/admin/outreach`, le panneau « Pipeline de prospection » (`components/admin/KanbanBoard.tsx`) répartit les prospects d'`OutreachProspect` en six colonnes selon `pipelineStatus` : Nouveau, Icebreaker Généré, Email 1 Envoyé, Relance 1, Répondu, Refus. Le menu d'une carte déplace le prospect : l'affichage suit aussitôt, puis la Server Action `updateLeadStatus` (`app/admin/outreach/actions.ts`, session admin revérifiée) enregistre le statut et revalide la page. Si l'écriture échoue, la carte revient dans sa colonne et le panneau affiche l'erreur.
+
+- **Deux statuts distincts** : `pipelineStatus` ne sert qu'au Kanban et ne change qu'à la main. La migration y a rangé les prospects existants d'après leur `status`. `status`, en texte libre, reste celui du registre et de l'agent Chasseur : une carte déplacée en Refus n'empêche donc pas le Chasseur de rédiger une relance, et un prospect importé arrive en Nouveau quel que soit son statut au registre.
+- **Pas encore alimentés** : la table `EmailSequence` (journal des envois, supprimé avec le prospect) et les champs `emailOpenedAt` et `linkClickedAt`. Aucun code n'y écrit.
+- **Nom du contact** : le registre n'en a pas, la carte affiche l'entreprise et l'adresse.
+
 ### Messagerie
 
 Chaque prospect a un historique d'échanges (`OutreachMessage`) : `OUTBOUND` pour un email envoyé par le Hub à la validation d'un brouillon, enregistré dans la même transaction que l'envoi ; `INBOUND` pour une réponse lue dans la boîte IMAP. Les emails antérieurs à la messagerie (registre du prospecteur) n'y figurent pas. Sur `/admin/outreach`, le bouton « Historique » de chaque prospect ouvre la conversation : plein écran sur mobile, panneau à droite à partir de `md`, vos emails à droite, ses réponses à gauche. Elle est relue toutes les 30 s tant que le panneau est ouvert (`GET /api/outreach/messages/[prospectId]`, session admin).

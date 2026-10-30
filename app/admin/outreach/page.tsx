@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AgentSettingsForm } from "@/components/admin/AgentSettingsForm";
 import { DraftsPanel } from "@/components/admin/DraftsPanel";
+import { KanbanBoard } from "@/components/admin/KanbanBoard";
 import { ProspectHistory } from "@/components/admin/ProspectHistory";
 import { SegmentDraftsPanel } from "@/components/admin/SegmentDraftsPanel";
 import { DRAFT_STATUS } from "@/lib/chasseur";
+import { MAX_KANBAN_LEADS } from "@/lib/kanban";
 import { prisma } from "@/lib/prisma";
+import { getKanbanLeads } from "./actions";
 
 export const metadata: Metadata = {
   title: "Prospection · Securium Core",
@@ -47,10 +50,11 @@ function PhoneLink({ phone }: { phone: string | null }) {
 // Prospects démarchés (scripts/migrate-outreach.mts) et brouillons de l'agent Chasseur à valider.
 // Mobile d'abord : cartes empilées, tableau à partir de md.
 export default async function OutreachPage() {
-  const [prospects, total, byStatus] = await Promise.all([
+  const [prospects, total, byStatus, leads] = await Promise.all([
     prisma.outreachProspect.findMany({ orderBy: { lastContactAt: "desc" }, take: MAX_ROWS }),
     prisma.outreachProspect.count(),
     prisma.outreachProspect.groupBy({ by: ["status"], _count: { _all: true } }),
+    getKanbanLeads(),
   ]);
   const statuses = byStatus.sort((a, b) => b._count._all - a._count._all);
 
@@ -79,6 +83,13 @@ export default async function OutreachPage() {
         </header>
 
         <DraftsPanel />
+
+        <KanbanBoard leads={leads} />
+        {total > MAX_KANBAN_LEADS && (
+          <p className="text-xs text-muted-foreground">
+            {MAX_KANBAN_LEADS} prospects au Kanban sur {total}, du premier contact le plus récent au plus ancien.
+          </p>
+        )}
 
         <SegmentDraftsPanel />
 
