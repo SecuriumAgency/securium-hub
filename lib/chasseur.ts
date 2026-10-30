@@ -1,7 +1,7 @@
 // Agent Chasseur : rédige avec Claude des brouillons d'email de prospection pour les prospects
 // d'OutreachProspect (scripts/agent-chasseur.mts). Rien ne part sans validation humaine sur
 // /admin/outreach, qui seule pose le statut « Envoye ».
-import { isExcludedStatus } from "./outreach";
+import { isExcludedStatus, NEW_STATUS } from "./outreach";
 
 // Brouillon rédigé, en attente de validation sur /admin/outreach.
 export const DRAFT_STATUS = "A_valider";
@@ -134,7 +134,7 @@ export const OPT_OUT_FOOTER =
   "—\nSi vous ne souhaitez plus recevoir de message de Securium Agency, répondez simplement « STOP » à cet email.";
 
 // Messageries grand public : le domaine de l'adresse n'y dit rien de l'entreprise.
-const PUBLIC_MAIL_DOMAINS = new Set([
+export const PUBLIC_MAIL_DOMAINS = new Set([
   "gmail.com", "googlemail.com", "outlook.com", "outlook.fr", "hotmail.com", "hotmail.fr", "live.fr", "live.com",
   "yahoo.com", "yahoo.fr", "orange.fr", "wanadoo.fr", "free.fr", "sfr.fr", "neuf.fr", "laposte.net", "icloud.com",
   "me.com", "aol.com", "gmx.fr", "bbox.fr",
@@ -164,6 +164,8 @@ type Eligibility = { email: string; status: string; lastContactAt: Date; hasDraf
 export function exclusionReason(prospect: Eligibility, blocklist: ReadonlySet<string>, now: Date) {
   if (blocklist.has(prospect.email)) return "blocklist";
   if (isExcludedStatus(prospect.status)) return "statut exclu";
+  // Jamais contacté : c'est un premier contact, qui relève de l'icebreaker et non d'une relance.
+  if (prospect.status === NEW_STATUS) return "jamais contacté";
   // Il a répondu (peut-être « STOP ») : la suite se fait à la main, jamais par une relance automatique.
   if (prospect.hasReplied) return "a répondu";
   if (prospect.hasDraft || prospect.status === DRAFT_STATUS) return "brouillon en attente";

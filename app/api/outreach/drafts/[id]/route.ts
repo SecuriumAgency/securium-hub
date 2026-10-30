@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasAdminSession } from "@/lib/admin-session";
 import { OUTBOUND, SENT_STATUS } from "@/lib/chasseur";
 import { MailConfigError, sendOutreachEmail } from "@/lib/mail";
+import { PipelineStatus } from "@/lib/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import { isWorkingTime } from "@/lib/schedule";
+import { isWorkingTime, OFFICE_HOURS } from "@/lib/schedule";
 
 // Identifiant cuid : rien d'autre n'atteint la base.
 const DRAFT_ID = /^[a-z0-9]{1,40}$/;
@@ -25,15 +26,16 @@ async function draftId(context: Context) {
 const notFound = () => NextResponse.json({ error: "Brouillon introuvable : déjà validé ou rejeté." }, { status: 404 });
 
 // Valider : le Hub envoie l'email en SMTP (lib/mail.ts), l'enregistre dans l'historique (OutreachMessage
-// OUTBOUND), puis le prospect passe à « Envoye », daté de maintenant, et le brouillon disparaît. Tout dans une transaction : si l'envoi échoue, rien n'est
-// écrit, le brouillon reste, et la réponse 500 détaille l'erreur.
+// OUTBOUND), puis le prospect passe à « Envoye », daté de maintenant, et à « Email 1 Envoyé » au Kanban : le brouillon disparaît.
+// Tout dans une transaction : si l'envoi échoue, rien n'est écrit, le brouillon reste, et la réponse 500 détaille l'erreur.
 export async function PATCH(_request: NextRequest, context: Context) {
   const id = await draftId(context);
   if (id instanceof NextResponse) return id;
-  // Même règle que l'agent Chasseur : aucun email de prospection ne part le week-end (heure de Paris).
-  if (!isWorkingTime()) {
+  // Même calendrier que l'agent Chasseur : aucun email de prospection hors du lundi au vendredi, de 9h00 à
+  // 18h00 à Paris. Refus avant toute écriture : le brouillon reste en attente.
+  if (!isWorkingTime(new Date(), OFFICE_HOURS)) {
     return NextResponse.json(
-      { error: "Envoi bloqué le week-end (heure de Paris) : brouillon conservé, à valider à partir de lundi." },
+      { error: "Envoi bloqué hors plage d'envoi (lundi au vendredi, 9h00 à 18h00, heure de Paris) : brouillon conservé." },
       { status: 423 },
     );
   }
@@ -57,6 +59,12 @@ export async function PATCH(_request: NextRequest, context: Context) {
       // Historique des échanges : l'email tel qu'il est parti, avec son Message-ID.
       await tx.outreachMessage.create({
         data: { prospectId: draft.prospectId, direction: OUTBOUND, subject: draft.subject, body: draft.body, messageId: sent.messageId || null },
+      });
+      // Colonne du Kanban : un prospect encore au début du parcours passe à « Email 1 Envoyé ». Une colonne plus
+      // avancée, posée à la main (relance, réponse, refus), reste telle quelle.
+      await tx.outreachProspect.updateMany({
+        where: { id: draft.prospectId, pipelineStatus: { in: [PipelineStatus.NOUVEAU, PipelineStatus.ICEBREAKER_GENERE] } },
+        data: { pipelineStatus: PipelineStatus.EMAIL_1_ENVOYE },
       });
       return tx.outreachProspect.update({
         where: { id: draft.prospectId },

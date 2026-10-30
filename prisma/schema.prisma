@@ -47,9 +47,13 @@ model OutreachProspect {
   // Adresse normalisée (minuscules) : un prospect par adresse, un réimport ne crée aucun doublon.
   email          String            @unique
   phone          String?
-  // Dernier statut du registre de prospection : Envoye, Relance_1…
+  // Ville et secteur d'activité, importés par CSV (POST /api/outreach/import) : l'icebreaker s'en sert.
+  city           String?
+  activity       String?
+  // Dernier statut du registre de prospection : Envoye, Relance_1… ; « Nouveau » pour un prospect importé par CSV.
   status         String
-  // Colonne du Kanban, déplacée à la main : le registre et l'agent Chasseur gardent `status`, en texte libre.
+  // Colonne du Kanban : déplacée à la main, posée à la rédaction d'un icebreaker, puis « Email 1 Envoyé » à l'envoi.
+  // Le registre et l'agent Chasseur gardent `status`, en texte libre.
   pipelineStatus PipelineStatus    @default(NOUVEAU)
   // Premier email ouvert, premier lien cliqué.
   emailOpenedAt  DateTime?

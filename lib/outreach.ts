@@ -35,6 +35,10 @@ const MAX_LENGTH = { company: 200, email: 254, phone: 40, status: 40, source: 60
 const MAX_ERRORS = 20;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Statut d'un prospect importé par CSV (POST /api/outreach/import) : jamais contacté. Les relances du
+// Chasseur l'excluent ; seul l'icebreaker (lib/outreach-ai.ts) le cible.
+export const NEW_STATUS = "Nouveau";
+
 // Comparaison sans casse ni accents : « Désinscrit » et « desinscrit » sont le même statut.
 export function normalizeStatus(status: string) {
   return status.trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();

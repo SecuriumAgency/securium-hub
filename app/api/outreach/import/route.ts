@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isAuthorized } from "@/lib/api-key";
-import { parseOutreachBatch } from "@/lib/outreach";
+import { NEW_STATUS, parseOutreachBatch } from "@/lib/outreach";
+import { CSV_SOURCE, parseLeadCsv } from "@/lib/outreach-leads";
 import { prisma } from "@/lib/prisma";
 
 const MAX_BODY_CHARS = 1024 * 1024;
@@ -14,6 +15,8 @@ const TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 90_000 };
 // inconnu est créé ; un prospect connu n'est mis à jour que si le registre a un contact plus récent que
 // le Hub : un email validé sur /admin/outreach (agent Chasseur) n'est donc pas écrasé par un registre
 // plus ancien. Route silencieuse : un prospect n'est pas un lead, aucune notification ne part.
+// Même route en CSV (Content-Type: text/csv, lignes company, email, phone, city, activity) : de nouveaux
+// prospects, au statut Nouveau, jamais contactés. Même clé ; un email déjà connu n'est pas modifié.
 export async function POST(request: NextRequest) {
   const secret = process.env.HUB_SECRET_KEY;
   if (!secret) {
@@ -28,6 +31,7 @@ export async function POST(request: NextRequest) {
   if (raw.length > MAX_BODY_CHARS) {
     return NextResponse.json({ error: "Lot trop volumineux." }, { status: 413 });
   }
+  if (request.headers.get("content-type")?.toLowerCase().startsWith("text/csv")) return importLeadsCsv(raw);
   let body: unknown;
   try {
     body = JSON.parse(raw);
@@ -76,5 +80,23 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[outreach] synchronisation impossible :", error);
     return NextResponse.json({ error: "Enregistrement du lot impossible." }, { status: 500 });
+  }
+}
+
+// Corps CSV : un seul INSERT, skipDuplicates pour un email déjà connu. Pas de contact réel encore : la date
+// d'import sert de premier contact et de dernière action, le temps que l'icebreaker parte.
+async function importLeadsCsv(raw: string) {
+  const parsed = parseLeadCsv(raw);
+  if (!parsed.ok) return NextResponse.json({ error: "Fichier CSV invalide.", details: parsed.errors }, { status: 422 });
+  const now = new Date();
+  try {
+    const { count } = await prisma.outreachProspect.createMany({
+      data: parsed.leads.map((lead) => ({ ...lead, status: NEW_STATUS, source: CSV_SOURCE, createdAt: now, lastContactAt: now })),
+      skipDuplicates: true,
+    });
+    return NextResponse.json({ received: parsed.leads.length, created: count, existing: parsed.leads.length - count });
+  } catch (error) {
+    console.error("[outreach] import CSV impossible :", error);
+    return NextResponse.json({ error: "Enregistrement du fichier impossible." }, { status: 500 });
   }
 }

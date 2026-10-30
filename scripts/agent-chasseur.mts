@@ -17,7 +17,8 @@
  *
  * Exclus : adresses de blocklist.json (relue à chaque passage ; illisible, l'agent s'arrête), statuts
  * Desinscrit et Simulation, prospects qui ont répondu (réponse lue par scripts/agent-inbound.mts),
- * brouillon déjà en attente, dernier contact de moins de 7 jours.
+ * brouillon déjà en attente, dernier contact de moins de 7 jours, prospect jamais contacté (statut Nouveau,
+ * réservé à l'icebreaker, scripts/agent-icebreakers.mts).
  * Envoyé à Claude : entreprise, domaine et historique de contact, jamais l'adresse ni le téléphone.
  * Options : --data=<dossier de blocklist.json>, par défaut celui de securium-prospector.
  * Variables (.env.local puis .env du Hub) : POSTGRES_PRISMA_URL, ANTHROPIC_API_KEY (ou un profil
