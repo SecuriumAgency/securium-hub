@@ -14,8 +14,8 @@ export function moduleUrl(prefix: string) {
 // En-têtes du jeton de service Cloudflare Access, ajoutés à chaque appel d'un module. Ils ne partent que vers une
 // adresse https : le secret ne doit jamais circuler en clair. Sans jeton configuré, aucun en-tête n'est ajouté.
 export function accessHeaders(url: string): Record<string, string> {
-  const clientId = process.env.CLOUDFLARE_ACCESS_CLIENT_ID;
-  const clientSecret = process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET;
+  const clientId = process.env.CF_ACCESS_CLIENT_ID;
+  const clientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
   if (!clientId || !clientSecret || !url.startsWith("https://")) return {};
   return { "CF-Access-Client-Id": clientId, "CF-Access-Client-Secret": clientSecret };
 }

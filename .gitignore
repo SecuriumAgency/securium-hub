@@ -50,3 +50,6 @@ next-env.d.ts
 
 # état de session oh-my-claudecode : local, non versionné
 .omc/
+
+# modèle de configuration du Hub : suivi par git (les autres .env* restent ignorés)
+!.env.example
