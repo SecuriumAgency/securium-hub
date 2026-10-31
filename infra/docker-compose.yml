@@ -2,13 +2,14 @@
 # Démarrage : depuis infra/, `docker compose up -d`, après avoir rempli infra/.env (modèle : env.example).
 #
 # Réseaux :
-#   edge  : réseau ordinaire. Seuls calcom et chatwoot y sont attachés, pour publier leur API.
-#   app   : interne (internal: true). Bases de données et services applicatifs, sans sortie vers Internet.
+#   edge  : réseau ordinaire, avec sortie vers Internet. cloudflared s'y connecte à Cloudflare ; calcom et
+#           chatwoot y sortent aussi (envoi d'e-mails, intégrations).
+#   app   : interne (internal: true). Bases de données et services applicatifs. cloudflared y rejoint les modules.
 #   ai    : réseau ordinaire, sans port publié. Ollama a besoin de sortir pour télécharger ses modèles.
 #
-# Ports : aucun port n'est lié à toutes les interfaces. Les deux API consommées par le Hub
-# (Cal.com, Chatwoot) sont liées à 127.0.0.1 ; les autres services restent accessibles uniquement
-# depuis les réseaux Docker.
+# Ports : aucun service ne publie de port vers l'hôte Windows. Le trafic public entre par le tunnel Cloudflare,
+# seul conteneur exposé. Les hostnames du tunnel pointent vers les noms de service Docker (calcom:3000,
+# chatwoot-web:3000) : ils se configurent dans le tableau de bord Cloudflare Zero Trust, pas ici.
 
 name: securium-ecosystem
 
@@ -81,8 +82,6 @@ services:
     depends_on:
       chatwoot-init:
         condition: service_completed_successfully
-    ports:
-      - "127.0.0.1:${CHATWOOT_PORT:-3102}:3000"
     networks: [app, edge]
 
   chatwoot-sidekiq:
@@ -111,8 +110,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:${CALCOM_PORT:-3101}:3000"
     networks: [app, edge]
 
   # OpenProject : interface seulement, non publiée. Pour l'ouvrir depuis le Hub, publier son port
@@ -153,6 +150,16 @@ services:
       ollama:
         condition: service_started
     networks: [app, ai]
+
+  # Tunnel Cloudflare (Zero Trust) : seul conteneur qui reçoit le trafic public. Il relaie vers les modules
+  # par le réseau app. Le token vient du tableau de bord Cloudflare (Zero Trust > Networks > Tunnels).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    restart: unless-stopped
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?renseigner CLOUDFLARE_TUNNEL_TOKEN dans infra/.env}
+    networks: [app, edge]
 
 networks:
   edge:
