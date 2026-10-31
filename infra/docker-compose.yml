@@ -1,0 +1,171 @@
+# Modules open-source de l'écosystème Securium, orchestrés pour le Securium Hub.
+# Démarrage : depuis infra/, `docker compose up -d`, après avoir rempli infra/.env (modèle : env.example).
+#
+# Réseaux :
+#   edge  : réseau ordinaire. Seuls calcom et chatwoot y sont attachés, pour publier leur API.
+#   app   : interne (internal: true). Bases de données et services applicatifs, sans sortie vers Internet.
+#   ai    : réseau ordinaire, sans port publié. Ollama a besoin de sortir pour télécharger ses modèles.
+#
+# Ports : aucun port n'est lié à toutes les interfaces. Les deux API consommées par le Hub
+# (Cal.com, Chatwoot) sont liées à 127.0.0.1 ; les autres services restent accessibles uniquement
+# depuis les réseaux Docker.
+
+name: securium-ecosystem
+
+x-chatwoot-env: &chatwoot-env
+  RAILS_ENV: production
+  NODE_ENV: production
+  INSTALLATION_ENV: docker
+  SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE:?renseigner CHATWOOT_SECRET_KEY_BASE dans infra/.env}
+  FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://127.0.0.1:3102}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DATABASE: chatwoot
+  POSTGRES_USERNAME: ${POSTGRES_USER:-securium}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}
+  REDIS_URL: redis://redis:6379
+  RAILS_MAX_THREADS: "5"
+
+services:
+  postgres:
+    # pgvector est présent dans l'image : Chatwoot en a besoin pour ses fonctions IA.
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-securium}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Lu une seule fois, à la création du volume : crée les bases des modules.
+      - ./postgres/init-databases.sql:/docker-entrypoint-initdb.d/10-databases.sql:ro
+    networks: [app]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks: [app]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Chatwoot : préparation du schéma une fois, avant de lancer l'application et les workers.
+  chatwoot-init:
+    image: ${CHATWOOT_IMAGE:-chatwoot/chatwoot:latest}
+    command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    restart: "no"
+    environment: *chatwoot-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [app]
+
+  chatwoot-web:
+    image: ${CHATWOOT_IMAGE:-chatwoot/chatwoot:latest}
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    restart: unless-stopped
+    environment: *chatwoot-env
+    volumes:
+      - chatwoot-storage:/app/storage
+    depends_on:
+      chatwoot-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${CHATWOOT_PORT:-3102}:3000"
+    networks: [app, edge]
+
+  chatwoot-sidekiq:
+    image: ${CHATWOOT_IMAGE:-chatwoot/chatwoot:latest}
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    restart: unless-stopped
+    environment: *chatwoot-env
+    volumes:
+      - chatwoot-storage:/app/storage
+    depends_on:
+      chatwoot-init:
+        condition: service_completed_successfully
+    networks: [app]
+
+  # Cal.com : la base « calcom » est créée par init-databases.sql. L'image applique ses migrations au démarrage.
+  calcom:
+    image: ${CALCOM_IMAGE:-calcom/cal.com:latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-securium}:${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}@postgres:5432/calcom
+      DATABASE_DIRECT_URL: postgresql://${POSTGRES_USER:-securium}:${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}@postgres:5432/calcom
+      NEXTAUTH_SECRET: ${CALCOM_NEXTAUTH_SECRET:?renseigner CALCOM_NEXTAUTH_SECRET dans infra/.env}
+      CALENDSO_ENCRYPTION_KEY: ${CALCOM_ENCRYPTION_KEY:?renseigner CALCOM_ENCRYPTION_KEY dans infra/.env}
+      NEXT_PUBLIC_WEBAPP_URL: ${CALCOM_WEBAPP_URL:-http://127.0.0.1:3101}
+      NEXTAUTH_URL: ${CALCOM_WEBAPP_URL:-http://127.0.0.1:3101}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${CALCOM_PORT:-3101}:3000"
+    networks: [app, edge]
+
+  # OpenProject : interface seulement, non publiée. Pour l'ouvrir depuis le Hub, publier son port
+  # derrière un reverse proxy authentifié, puis renseigner OPENPROJECT_PUBLIC_URL dans le Hub.
+  openproject:
+    image: ${OPENPROJECT_IMAGE:-openproject/community:14}
+    restart: unless-stopped
+    environment:
+      OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_BASE:?renseigner OPENPROJECT_SECRET_KEY_BASE dans infra/.env}
+      OPENPROJECT_HOST__NAME: ${OPENPROJECT_HOST_NAME:-127.0.0.1:3103}
+      OPENPROJECT_HTTPS: "false"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-securium}:${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}@postgres:5432/openproject
+    volumes:
+      - openproject-assets:/var/openproject/assets
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app]
+
+  # WeKnora (base de connaissance) et Ollama (modèles locaux). L'image WeKnora n'est pas figée ici :
+  # la renseigner dans infra/.env après vérification dans sa documentation.
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    networks: [ai]
+
+  weknora:
+    image: ${WEKNORA_IMAGE:?renseigner WEKNORA_IMAGE dans infra/.env (image vérifiée dans la documentation WeKnora)}
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      DATABASE_URL: postgresql://${POSTGRES_USER:-securium}:${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}@postgres:5432/weknora
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks: [app, ai]
+
+networks:
+  edge:
+    driver: bridge
+  app:
+    driver: bridge
+    internal: true
+  ai:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  chatwoot-storage:
+  openproject-assets:
+  ollama-models:
