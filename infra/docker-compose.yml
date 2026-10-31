@@ -115,7 +115,7 @@ services:
   # OpenProject : interface seulement, non publiée. Pour l'ouvrir depuis le Hub, publier son port
   # derrière un reverse proxy authentifié, puis renseigner OPENPROJECT_PUBLIC_URL dans le Hub.
   openproject:
-    image: ${OPENPROJECT_IMAGE:-openproject/community:14}
+    image: openproject/community:latest
     restart: unless-stopped
     environment:
       OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_BASE:?renseigner OPENPROJECT_SECRET_KEY_BASE dans infra/.env}
@@ -129,8 +129,7 @@ services:
         condition: service_healthy
     networks: [app]
 
-  # WeKnora (base de connaissance) et Ollama (modèles locaux). L'image WeKnora n'est pas figée ici :
-  # la renseigner dans infra/.env après vérification dans sa documentation.
+  # Ollama (modèles locaux). WeKnora est désactivé plus bas : son image n'est pas publique.
   ollama:
     image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
     restart: unless-stopped
@@ -138,18 +137,19 @@ services:
       - ollama-models:/root/.ollama
     networks: [ai]
 
-  weknora:
-    image: ${WEKNORA_IMAGE:?renseigner WEKNORA_IMAGE dans infra/.env (image vérifiée dans la documentation WeKnora)}
-    restart: unless-stopped
-    environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      DATABASE_URL: postgresql://${POSTGRES_USER:-securium}:${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}@postgres:5432/weknora
-    depends_on:
-      postgres:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-    networks: [app, ai]
+# WeKnora : désactivé. L'image weknora/weknora ne se télécharge pas publiquement. Pour le réactiver, retirer le # de chaque ligne.
+#  weknora:
+#    image: ${WEKNORA_IMAGE:?renseigner WEKNORA_IMAGE dans infra/.env (image vérifiée dans la documentation WeKnora)}
+#    restart: unless-stopped
+#    environment:
+#      OLLAMA_BASE_URL: http://ollama:11434
+#      DATABASE_URL: postgresql://${POSTGRES_USER:-securium}:${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}@postgres:5432/weknora
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      ollama:
+#        condition: service_started
+#    networks: [app, ai]
 
   # Tunnel Cloudflare (Zero Trust) : seul conteneur qui reçoit le trafic public. Il relaie vers les modules
   # par le réseau app. Le token vient du tableau de bord Cloudflare (Zero Trust > Networks > Tunnels).
