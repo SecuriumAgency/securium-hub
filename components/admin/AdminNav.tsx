@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Box, ExternalLink, FileText, FlaskConical, Factory, Menu, Monitor, Search, Target, X, type LucideIcon } from "lucide-react";
+import { Bot, Box, Clapperboard, ExternalLink, FileText, FlaskConical, Factory, Menu, Monitor, Search, Target, X, type LucideIcon } from "lucide-react";
 import { useOverlay } from "./use-overlay";
 
 // Une entrée sans `href` n'a pas encore de page : elle s'affiche avec la mention « Bientôt », sans lien.
@@ -18,6 +18,7 @@ const LINKS: NavItem[] = [
   { href: "/admin/agents", label: "Escadron Agents", icon: Bot },
   { href: "/admin/seo", label: "Audit SEO", icon: Search },
   { href: "/admin/reports", label: "Rapports", icon: FileText },
+  { href: "/admin/reels", label: "Reels Studio", icon: Clapperboard },
   { href: "https://www.securium-labs.app", label: "Labs", icon: FlaskConical, external: true },
   // Les agents du poste sont regroupés sur la page des agents : l'ancre mène directement à ce groupe.
   { href: "/admin/agents#poste", label: "Securium OS", icon: Monitor },
