@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { hasAdminSession } from "@/lib/admin-session";
 import { INTEGRATION_MODULES, type IntegrationModule } from "@/lib/integrations/modules";
-import { moduleUrl, NO_STORE, unauthorized } from "@/lib/integrations/bridge";
+import { accessHeaders, isAccessDenied, moduleUrl, NO_STORE, unauthorized } from "@/lib/integrations/bridge";
 
-// État des neuf modules, pour la grille de /admin/ecosystem. Un module est « en ligne » s'il répond sans erreur serveur :
-// une réponse 401 ou 404 au HEAD prouve qu'il tourne. Le contenu de sa réponse n'est jamais lu.
+// État des neuf modules, pour la grille de /admin/ecosystem. Un module est « en ligne » s'il répond sans erreur serveur
+// et s'il accepte le jeton Access : un refus Access (403, ou redirection vers sa page de connexion) le marque hors ligne.
+// Le contenu de sa réponse n'est jamais lu.
 export const dynamic = "force-dynamic";
 
 const PING_TIMEOUT_MS = 3000;
@@ -17,9 +18,15 @@ async function ping(module: IntegrationModule): Promise<ModuleStatus> {
 
   const started = performance.now();
   try {
-    const response = await fetch(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
+    const response = await fetch(url, {
+      method: "HEAD",
+      redirect: "manual",
+      headers: accessHeaders(url),
+      signal: AbortSignal.timeout(PING_TIMEOUT_MS),
+    });
     await response.body?.cancel();
-    return { id: module.id, configured: true, online: response.status < 500, latencyMs: Math.round(performance.now() - started) };
+    const online = response.status < 500 && !isAccessDenied(response);
+    return { id: module.id, configured: true, online, latencyMs: Math.round(performance.now() - started) };
   } catch {
     return { id: module.id, configured: true, online: false, latencyMs: null };
   }

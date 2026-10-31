@@ -11,6 +11,22 @@ export function moduleUrl(prefix: string) {
   return process.env[`${prefix}_URL`]?.trim().replace(/\/+$/, "") || null;
 }
 
+// En-têtes du jeton de service Cloudflare Access, ajoutés à chaque appel d'un module. Ils ne partent que vers une
+// adresse https : le secret ne doit jamais circuler en clair. Sans jeton configuré, aucun en-tête n'est ajouté.
+export function accessHeaders(url: string): Record<string, string> {
+  const clientId = process.env.CLOUDFLARE_ACCESS_CLIENT_ID;
+  const clientSecret = process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET;
+  if (!clientId || !clientSecret || !url.startsWith("https://")) return {};
+  return { "CF-Access-Client-Id": clientId, "CF-Access-Client-Secret": clientSecret };
+}
+
+// Cloudflare Access refuse une requête sans jeton valide : 403, ou redirection vers sa page de connexion.
+export function isAccessDenied(response: Response) {
+  if (response.status === 401 || response.status === 403) return true;
+  const location = response.headers.get("location") ?? "";
+  return response.status >= 300 && response.status < 400 && location.includes("cloudflareaccess.com");
+}
+
 // Erreur attendue côté module : son message est sûr à renvoyer, le corps de sa réponse ne l'est pas.
 export class ModuleFailure extends Error {}
 
@@ -31,12 +47,26 @@ export function invalidInput(message: string) {
 
 // Appel d'un module, borné par `timeoutMs`. Une réponse qui n'est pas un succès lève ModuleFailure.
 // `redirect: "manual"` : une redirection du module n'est jamais suivie, elle échoue comme une erreur.
-export async function callModule(name: string, url: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
+export async function callModule(
+  name: string,
+  url: string,
+  init: Omit<RequestInit, "headers"> & { headers?: Record<string, string> } = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+) {
   let response: Response;
   try {
-    response = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    response = await fetch(url, {
+      ...init,
+      headers: { ...accessHeaders(url), ...init.headers },
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
   } catch {
     throw new ModuleFailure(`${name} ne répond pas.`);
+  }
+  if (isAccessDenied(response)) {
+    await response.body?.cancel();
+    throw new ModuleFailure(`${name} refuse l'accès (Cloudflare Access).`);
   }
   if (!response.ok) {
     await response.body?.cancel();
