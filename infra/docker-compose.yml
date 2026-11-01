@@ -120,7 +120,7 @@ services:
     environment:
       OPENPROJECT_SECRET_KEY_BASE: ${OPENPROJECT_SECRET_KEY_BASE:?renseigner OPENPROJECT_SECRET_KEY_BASE dans infra/.env}
       OPENPROJECT_HOST__NAME: ${OPENPROJECT_HOST_NAME:-127.0.0.1:3103}
-      OPENPROJECT_HTTPS: "false"
+      OPENPROJECT_HTTPS: "true"
       DATABASE_URL: postgresql://${POSTGRES_USER:-securium}:${POSTGRES_PASSWORD:?renseigner POSTGRES_PASSWORD dans infra/.env}@postgres:5432/openproject
     volumes:
       - openproject-assets:/var/openproject/assets
