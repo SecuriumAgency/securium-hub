@@ -53,3 +53,5 @@ next-env.d.ts
 
 # modèle de configuration du Hub : suivi par git (les autres .env* restent ignorés)
 !.env.example
+# secrets locaux des Workers Cloudflare
+.dev.vars
