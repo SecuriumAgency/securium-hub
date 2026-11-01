@@ -23,11 +23,11 @@ export async function POST(request: Request) {
   try {
     const upstream = await callModule(
       "VoiceStudio",
-      `${url}/api/speech`,
+      `${url}/v1/audio/speech`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ text: body.data.text }),
+        body: JSON.stringify({ model: "tts-1", voice: "alloy", input: body.data.text }),
       },
       SPEECH_TIMEOUT_MS,
     );

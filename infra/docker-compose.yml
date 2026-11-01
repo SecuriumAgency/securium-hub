@@ -137,7 +137,235 @@ services:
       - ollama-models:/root/.ollama
     networks: [ai]
 
-# WeKnora : désactivé. L'image weknora/weknora ne se télécharge pas publiquement. Pour le réactiver, retirer le # de chaque ligne.
+  # Open-SEO : audit SEO. Une seule image, sans compte intégré (AUTH_MODE=local_noauth) : son hostname public
+  # doit être protégé par Cloudflare Access. La clé DataForSEO peut aussi se saisir dans l'application.
+  open-seo:
+    image: ${OPEN_SEO_IMAGE:-ghcr.io/every-app/open-seo:latest}
+    restart: unless-stopped
+    environment:
+      CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+      PORT: "3001"
+      ALLOWED_HOST: ${OPEN_SEO_HOST:-seo.securium-agency.fr}
+      AUTH_MODE: local_noauth
+      BETTER_AUTH_SECRET: ${OPEN_SEO_AUTH_SECRET:?renseigner OPEN_SEO_AUTH_SECRET dans infra/.env}
+      DATAFORSEO_API_KEY: ${DATAFORSEO_API_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENSEO_TELEMETRY_DISABLED: "1"
+      DO_NOT_TRACK: "1"
+    volumes:
+      - open-seo-data:/app/.wrangler
+    networks: [app, edge]
+
+  # Open-Higgsfield : studio de génération d'images et de vidéos. Image construite depuis le dépôt, à un commit figé.
+  # Les modèles appellent des services externes : sortie par le réseau edge.
+  open-higgsfield:
+    build:
+      context: https://github.com/Anil-matcha/Open-Higgsfield-AI.git#0e15dc3c73278e1a38608fb6502ca4dc10324af6
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    networks: [app, edge]
+
+  # Cap : enregistrement et partage de vidéos. Base MySQL et stockage S3 (MinIO) propres à Cap, sans port publié.
+  cap-web:
+    image: ${CAP_IMAGE:-ghcr.io/capsoftware/cap-web:latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://cap:${CAP_MYSQL_PASSWORD:?renseigner CAP_MYSQL_PASSWORD dans infra/.env}@cap-mysql:3306/cap
+      WEB_URL: ${CAP_URL:?renseigner CAP_URL dans infra/.env}
+      NEXTAUTH_URL: ${CAP_URL:?renseigner CAP_URL dans infra/.env}
+      NEXTAUTH_SECRET: ${CAP_NEXTAUTH_SECRET:?renseigner CAP_NEXTAUTH_SECRET dans infra/.env}
+      DATABASE_ENCRYPTION_KEY: ${CAP_DATABASE_ENCRYPTION_KEY:?renseigner CAP_DATABASE_ENCRYPTION_KEY dans infra/.env}
+      MEDIA_SERVER_WEBHOOK_SECRET: ${CAP_MEDIA_SERVER_WEBHOOK_SECRET:?renseigner CAP_MEDIA_SERVER_WEBHOOK_SECRET dans infra/.env}
+      MEDIA_SERVER_URL: http://cap-media-server:3456
+      MEDIA_SERVER_WEBHOOK_URL: http://cap-web:3000
+      CAP_AWS_ACCESS_KEY: ${CAP_MINIO_ROOT_USER:?renseigner CAP_MINIO_ROOT_USER dans infra/.env}
+      CAP_AWS_SECRET_KEY: ${CAP_MINIO_ROOT_PASSWORD:?renseigner CAP_MINIO_ROOT_PASSWORD dans infra/.env}
+      CAP_AWS_BUCKET: cap
+      CAP_AWS_REGION: us-east-1
+      S3_PUBLIC_ENDPOINT: ${CAP_S3_PUBLIC_URL:?renseigner CAP_S3_PUBLIC_URL dans infra/.env}
+      S3_INTERNAL_ENDPOINT: http://cap-minio:9000
+      S3_PATH_STYLE: "true"
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_DOMAIN: ${RESEND_FROM_DOMAIN:-}
+    depends_on:
+      cap-mysql:
+        condition: service_healthy
+      cap-minio-setup:
+        condition: service_completed_successfully
+    networks: [app, edge]
+
+  cap-media-server:
+    build:
+      context: https://github.com/CapSoftware/Cap.git#6d78eb2a7e9c6634116c1d9ad3ec5375055af404:apps/media-server
+      dockerfile: Dockerfile.standalone
+    restart: unless-stopped
+    environment:
+      PORT: "3456"
+      MEDIA_SERVER_WEBHOOK_SECRET: ${CAP_MEDIA_SERVER_WEBHOOK_SECRET:?renseigner CAP_MEDIA_SERVER_WEBHOOK_SECRET dans infra/.env}
+    networks: [app]
+
+  cap-mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: cap
+      MYSQL_USER: cap
+      MYSQL_PASSWORD: ${CAP_MYSQL_PASSWORD:?renseigner CAP_MYSQL_PASSWORD dans infra/.env}
+      MYSQL_ROOT_PASSWORD: ${CAP_MYSQL_ROOT_PASSWORD:?renseigner CAP_MYSQL_ROOT_PASSWORD dans infra/.env}
+    command: ["--max_connections=1000", "--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - cap-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u cap -p\"$$MYSQL_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [app]
+
+  cap-minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${CAP_MINIO_ROOT_USER:?renseigner CAP_MINIO_ROOT_USER dans infra/.env}
+      MINIO_ROOT_PASSWORD: ${CAP_MINIO_ROOT_PASSWORD:?renseigner CAP_MINIO_ROOT_PASSWORD dans infra/.env}
+    volumes:
+      - cap-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks: [app]
+
+  # Crée le bucket « cap » une fois, puis s'arrête.
+  cap-minio-setup:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd
+    restart: "no"
+    environment:
+      MINIO_ROOT_USER: ${CAP_MINIO_ROOT_USER:?renseigner CAP_MINIO_ROOT_USER dans infra/.env}
+      MINIO_ROOT_PASSWORD: ${CAP_MINIO_ROOT_PASSWORD:?renseigner CAP_MINIO_ROOT_PASSWORD dans infra/.env}
+    depends_on:
+      cap-minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "mc alias set capminio http://cap-minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\" && mc mb capminio/cap --ignore-existing"]
+    networks: [app]
+
+  # VoiceStudio : synthèse vocale, profil CPU. API compatible OpenAI sur /v1/audio/speech, protégée par clé Bearer.
+  # Le premier démarrage télécharge environ 4 Go de modèles : sortie par le réseau edge. Aucun port publié.
+  voicestudio:
+    image: ${VOICESTUDIO_IMAGE:-ghcr.io/debpalash/voicestudio:stable}
+    restart: unless-stopped
+    environment:
+      HF_HOME: /app/omnivoice_data/huggingface
+      HF_TOKEN: ${HF_TOKEN:-}
+      OMNIVOICE_DATA_DIR: /app/omnivoice_data
+      PYTHONPATH: /app/backend
+      PYTHONUNBUFFERED: "1"
+      OMNIVOICE_SERVER_MODE: "1"
+      OMNIVOICE_API_KEY: ${OMNIVOICE_API_KEY:?renseigner OMNIVOICE_API_KEY dans infra/.env}
+    volumes:
+      - voicestudio-data:/app/omnivoice_data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3900/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    networks: [app, edge]
+
+  # WeKnora : base de connaissance et recherche. Services core : application, interface, lecteur de documents,
+  # PostgreSQL et Redis. Les modules optionnels (SearXNG, MinIO, graphes, bases vectorielles) restent désactivés.
+  # OLLAMA_OPTIONAL=true : l'application démarre sans modèle ; le fournisseur de modèles se configure ensuite dans l'interface.
+  weknora-postgres:
+    image: paradedb/paradedb:v0.25.11-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${WEKNORA_DB_USER:?renseigner WEKNORA_DB_USER dans infra/.env}
+      POSTGRES_PASSWORD: ${WEKNORA_DB_PASSWORD:?renseigner WEKNORA_DB_PASSWORD dans infra/.env}
+      POSTGRES_DB: ${WEKNORA_DB_NAME:?renseigner WEKNORA_DB_NAME dans infra/.env}
+    volumes:
+      - weknora-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks: [app]
+
+  weknora-redis:
+    image: redis:7.0-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${WEKNORA_REDIS_PASSWORD:?renseigner WEKNORA_REDIS_PASSWORD dans infra/.env}"]
+    networks: [app]
+
+  weknora-docreader:
+    image: wechatopenai/weknora-docreader:latest
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Paris
+      DOCREADER_IMAGE_OUTPUT_DIR: /tmp/docreader
+      GRPC_TLS_ENABLED: "false"
+    expose:
+      - "50051"
+    volumes:
+      - weknora-docreader-tmp:/tmp/docreader
+    networks: [app]
+
+  weknora-app:
+    image: wechatopenai/weknora-app:latest
+    restart: unless-stopped
+    environment:
+      GIN_MODE: release
+      TZ: Europe/Paris
+      DOCREADER_ADDR: weknora-docreader:50051
+      DOCREADER_TRANSPORT: grpc
+      DB_DRIVER: postgres
+      DB_HOST: weknora-postgres
+      DB_PORT: "5432"
+      DB_USER: ${WEKNORA_DB_USER:?renseigner WEKNORA_DB_USER dans infra/.env}
+      DB_PASSWORD: ${WEKNORA_DB_PASSWORD:?renseigner WEKNORA_DB_PASSWORD dans infra/.env}
+      DB_NAME: ${WEKNORA_DB_NAME:?renseigner WEKNORA_DB_NAME dans infra/.env}
+      REDIS_ADDR: weknora-redis:6379
+      REDIS_PASSWORD: ${WEKNORA_REDIS_PASSWORD:?renseigner WEKNORA_REDIS_PASSWORD dans infra/.env}
+      REDIS_DB: "0"
+      REDIS_PREFIX: "stream:"
+      STORAGE_TYPE: local
+      OLLAMA_OPTIONAL: "true"
+      JWT_SECRET: ${WEKNORA_JWT_SECRET:?renseigner WEKNORA_JWT_SECRET dans infra/.env}
+      WEKNORA_SANDBOX_DOCKER_ENABLED: "false"
+    volumes:
+      - weknora-data-files:/data/files
+      - weknora-docreader-tmp:/tmp/docreader:ro
+      - ./weknora/config/config.yaml:/app/config/config.yaml:ro
+    depends_on:
+      weknora-postgres:
+        condition: service_healthy
+      weknora-redis:
+        condition: service_started
+      weknora-docreader:
+        condition: service_started
+    networks: [app, edge]
+
+  weknora-frontend:
+    image: wechatopenai/weknora-ui:latest
+    restart: unless-stopped
+    environment:
+      APP_HOST: weknora-app
+      APP_PORT: "8080"
+      APP_SCHEME: http
+    depends_on:
+      weknora-app:
+        condition: service_started
+    networks: [app]
+
+# Ancienne définition WeKnora complète, commentée et remplacée par les services weknora-* ci-dessus. Référence seulement :
 #  weknora:
 #    image: ${WEKNORA_IMAGE:?renseigner WEKNORA_IMAGE dans infra/.env (image vérifiée dans la documentation WeKnora)}
 #    restart: unless-stopped
@@ -176,3 +404,10 @@ volumes:
   chatwoot-storage:
   openproject-assets:
   ollama-models:
+  open-seo-data:
+  cap-mysql-data:
+  cap-minio-data:
+  voicestudio-data:
+  weknora-postgres-data:
+  weknora-docreader-tmp:
+  weknora-data-files:
