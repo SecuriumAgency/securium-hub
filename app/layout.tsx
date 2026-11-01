@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter, Syne } from "next/font/google";
 import "./globals.css";
+import ChatwootWidget from "@/components/ChatwootWidget";
 
 // Polices de la charte Securium Agency : Inter pour le texte, Syne pour les titres (classe admin-shell).
 const inter = Inter({
@@ -34,6 +35,7 @@ export default function RootLayout({
         className={`${inter.variable} ${syne.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <ChatwootWidget />
       </body>
     </html>
   );
