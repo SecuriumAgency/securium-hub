@@ -9,7 +9,10 @@ const GENERATION_TIMEOUT_MS = 120_000;
 
 export type LocalImageResult = { ok: true; imageBase64: string } | { ok: false; error: string };
 
-export async function generateImageOnPremise(prompt: string): Promise<LocalImageResult> {
+// Dimensions et nombre d'étapes facultatifs : le nœud applique ses valeurs par défaut sinon.
+export type LocalImageOptions = { width?: number; height?: number; steps?: number };
+
+export async function generateImageOnPremise(prompt: string, options: LocalImageOptions = {}): Promise<LocalImageResult> {
   const text = prompt.trim();
   if (!text) return { ok: false, error: "Prompt vide." };
 
@@ -23,7 +26,7 @@ export async function generateImageOnPremise(prompt: string): Promise<LocalImage
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({ prompt: text, ...options }),
       },
       GENERATION_TIMEOUT_MS,
     );
