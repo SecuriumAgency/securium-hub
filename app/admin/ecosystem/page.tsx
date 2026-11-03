@@ -24,7 +24,7 @@ export default function EcosystemPage() {
 
         <header className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold text-foreground md:text-4xl">Écosystème</h1>
-          <p className="text-sm text-muted-foreground">Les neuf modules de l&apos;agence, reliés au Hub.</p>
+          <p className="text-sm text-muted-foreground">Les modules de l&apos;agence, reliés au Hub.</p>
         </header>
 
         <EcosystemGrid modules={modules} />

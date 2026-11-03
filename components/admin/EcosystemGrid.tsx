@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import type { IntegrationModule } from "@/lib/integrations/modules";
 
 export type EcosystemModule = IntegrationModule & { openUrl: string | null };
@@ -93,8 +94,16 @@ function Pill({ tone, children }: { tone: keyof typeof TONES; children: React.Re
 const buttonClass =
   "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-primary/40 bg-primary/10 px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/20 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50";
 
-// Bouton « Ouvrir » : une adresse publique est configurée, sinon la carte le signale au lieu d'afficher un lien mort.
+// Bouton « Ouvrir » : une page du Hub, sinon une adresse publique configurée. Sans l'un ni l'autre, la carte le signale
+// au lieu d'afficher un lien mort.
 function OpenLink({ module }: { module: EcosystemModule }) {
+  if (module.page) {
+    return (
+      <Link href={module.page} className={buttonClass}>
+        Ouvrir {module.name}
+      </Link>
+    );
+  }
   if (!module.openUrl) return <p className="text-sm text-muted-foreground">Adresse d&apos;ouverture non configurée.</p>;
 
   return (

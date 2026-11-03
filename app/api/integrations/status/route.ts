@@ -3,7 +3,7 @@ import { hasAdminSession } from "@/lib/admin-session";
 import { INTEGRATION_MODULES, type IntegrationModule } from "@/lib/integrations/modules";
 import { accessHeaders, isAccessDenied, moduleUrl, NO_STORE, unauthorized } from "@/lib/integrations/bridge";
 
-// État des neuf modules, pour la grille de /admin/ecosystem. Un module est « en ligne » s'il répond sans erreur serveur
+// État des modules, pour la grille de /admin/ecosystem. Un module est « en ligne » s'il répond sans erreur serveur
 // et s'il accepte le jeton Access : un refus Access (403, ou redirection vers sa page de connexion) le marque hors ligne.
 // Le contenu de sa réponse n'est jamais lu.
 export const dynamic = "force-dynamic";
