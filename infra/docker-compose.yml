@@ -7,9 +7,11 @@
 #   app   : interne (internal: true). Bases de données et services applicatifs. cloudflared y rejoint les modules.
 #   ai    : réseau ordinaire, sans port publié. Ollama a besoin de sortir pour télécharger ses modèles.
 #
-# Ports : aucun service ne publie de port vers l'hôte Windows. Le trafic public entre par le tunnel Cloudflare,
+# Ports : aucun module ne publie de port vers l'hôte Windows. Le trafic public entre par le tunnel Cloudflare,
 # seul conteneur exposé. Les hostnames du tunnel pointent vers les noms de service Docker (calcom:3000,
 # chatwoot-web:3000) : ils se configurent dans le tableau de bord Cloudflare Zero Trust, pas ici.
+# Exceptions, liées à 127.0.0.1 pour l'application Securium 360 lancée sur l'hôte : securium-360-db (5433)
+# et securium-redis (6379).
 
 name: securium-ecosystem
 
@@ -378,6 +380,29 @@ services:
 #      ollama:
 #        condition: service_started
 #    networks: [app, ai]
+
+  # Securium 360 : base PostgreSQL et cache Redis de l'application SaaS (dépôt securium-360).
+  # Liés à 127.0.0.1 : seule l'application lancée sur l'hôte s'y connecte. Réseau par défaut, distinct du réseau
+  # app, qui est interne et ne peut pas publier de port.
+  securium-360-db:
+    image: postgres:16-alpine
+    container_name: securium-360-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: securium_admin
+      POSTGRES_PASSWORD: ${DB_360_PASSWORD:?renseigner DB_360_PASSWORD dans infra/.env}
+      POSTGRES_DB: securium360
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - D:/securium-data/postgres-360:/var/lib/postgresql/data
+
+  # Sans mot de passe, lié à 127.0.0.1 uniquement. Cache sans persistance : aucun volume.
+  securium-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
 
   # Tunnel Cloudflare (Zero Trust) : seul conteneur qui reçoit le trafic public. Il relaie vers les modules
   # par le réseau app. Le token vient du tableau de bord Cloudflare (Zero Trust > Networks > Tunnels).
