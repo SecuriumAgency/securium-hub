@@ -56,7 +56,8 @@ export async function lookupDomain(domain: string): Promise<WhoisResult> {
     let response: Response;
     try {
       response = await fetch(`${RDAP_URL}${name}`, {
-        headers: { Accept: "application/rdap+json" },
+        // Identifiant honnête du client : les services RDAP peuvent refuser un client anonyme ou générique.
+        headers: { Accept: "application/rdap+json", "User-Agent": "SecuriumHub/1.0" },
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch {
@@ -67,6 +68,15 @@ export async function lookupDomain(domain: string): Promise<WhoisResult> {
     // « disponible » à tort, ce cas est signalé dans l'interface.
     if (response.status === 404) {
       return { ok: true, registrar: "—", expiry: "—", status: "Aucun enregistrement", isAvailable: true };
+    }
+    // 403 ou 429 : le service refuse la requête (limite de débit ou accès bloqué depuis l'hébergeur). Ce n'est pas
+    // une erreur du domaine, le message le dit pour ne pas faire croire à une panne du Hub.
+    if (response.status === 403 || response.status === 429) {
+      await response.body?.cancel();
+      return {
+        ok: false,
+        error: "Le service WHOIS refuse la requête pour l'instant (limite atteinte ou accès bloqué). Réessayez plus tard.",
+      };
     }
     if (!response.ok) {
       await response.body?.cancel();
