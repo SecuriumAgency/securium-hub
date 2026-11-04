@@ -37,6 +37,36 @@ export type ProcessTelemetry = {
 // online : liste lue. offline : daemon PM2 arrêté. unavailable : PM2 introuvable ou illisible.
 export type Pm2State = "online" | "offline" | "unavailable";
 
+// Planning des agents, calculé sur le poste (logs/planning.json). Facultatif : un poste qui n'envoie pas
+// encore ce champ n'est pas rejeté.
+export type PlanningDay = {
+  // Jour civil de Paris, AAAA-MM-JJ.
+  day: string;
+  agents: { name: string; actions: number; minutes: number; costUsd: number }[];
+};
+
+export type PlanningSnapshot = {
+  generatedAt: string;
+  intervalMinutes: number;
+  dailyBudgetUsd: number;
+  spentTodayUsd: number;
+  // Prochains passages de la rotation, dans l'ordre.
+  nextRuns: { at: string; agent: string }[];
+  // Les sept derniers jours, aujourd'hui compris.
+  days: PlanningDay[];
+};
+
+// Alerte de Felix Fix, l'agent de réparation (logs/felix-fix.jsonl du poste).
+export type FelixAlert = {
+  at: string;
+  key: string;
+  severity: "info" | "warn" | "critical";
+  title: string;
+  detail: string;
+  repair: string | null;
+  diagnosis: string | null;
+};
+
 // Corps de POST /api/telemetry. Même forme que TelemetryReport dans
 // Securium-OS/agent-dashboard/scripts/hub-telemetry.mts.
 export type TelemetryReport = {
@@ -51,6 +81,9 @@ export type TelemetryReport = {
   // Lignes les plus récentes du journal, la plus récente en premier.
   recent: AgentEvent[];
   pm2: { state: Pm2State; processes: ProcessTelemetry[] };
+  // Facultatifs : absents des postes qui n'envoient pas encore ces données.
+  planning?: PlanningSnapshot | null;
+  felix?: FelixAlert[];
 };
 
 export type TelemetryResponse = {
@@ -97,6 +130,54 @@ const isDate = (value: unknown): value is string => typeof value === "string" &&
 const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
 const isOneOf = (value: unknown, allowed: readonly string[]): value is string =>
   typeof value === "string" && allowed.includes(value);
+
+const SEVERITIES: readonly string[] = ["info", "warn", "critical"];
+const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+// Planning : une entrée mal formée est écartée, sans rejeter tout le rapport.
+function parsePlanning(value: unknown): PlanningSnapshot | null {
+  if (!isRecord(value) || !isDate(value.generatedAt)) return null;
+  if (!isNumber(value.intervalMinutes) || !isNumber(value.dailyBudgetUsd) || !isNumber(value.spentTodayUsd)) return null;
+  if (!Array.isArray(value.nextRuns) || !Array.isArray(value.days)) return null;
+
+  const nextRuns = value.nextRuns.slice(0, 32).flatMap((item) =>
+    isRecord(item) && isDate(item.at) && typeof item.agent === "string"
+      ? [{ at: item.at, agent: clip(item.agent, MAX_LENGTH.agent) }]
+      : [],
+  );
+  const days = value.days.slice(0, 14).flatMap((day) => {
+    if (!isRecord(day) || typeof day.day !== "string" || !Array.isArray(day.agents)) return [];
+    const agents = day.agents.slice(0, 32).flatMap((item) =>
+      isRecord(item) && typeof item.name === "string" && isNumber(item.actions) && isNumber(item.minutes) && isNumber(item.costUsd)
+        ? [{ name: clip(item.name, MAX_LENGTH.agent), actions: item.actions, minutes: item.minutes, costUsd: item.costUsd }]
+        : [],
+    );
+    return [{ day: clip(day.day, 10), agents }];
+  });
+
+  return {
+    generatedAt: value.generatedAt,
+    intervalMinutes: value.intervalMinutes,
+    dailyBudgetUsd: value.dailyBudgetUsd,
+    spentTodayUsd: value.spentTodayUsd,
+    nextRuns,
+    days,
+  };
+}
+
+function parseAlert(value: unknown): FelixAlert | null {
+  if (!isRecord(value) || !isDate(value.at) || typeof value.key !== "string" || typeof value.title !== "string") return null;
+  if (typeof value.detail !== "string" || !isOneOf(value.severity, SEVERITIES)) return null;
+  return {
+    at: value.at,
+    key: clip(value.key, 120),
+    severity: value.severity as FelixAlert["severity"],
+    title: clip(value.title, 200),
+    detail: clip(value.detail, 400),
+    repair: typeof value.repair === "string" ? clip(value.repair, 300) : null,
+    diagnosis: typeof value.diagnosis === "string" ? clip(value.diagnosis, 400) : null,
+  };
+}
 
 export function parseTelemetryReport(
   body: unknown,
@@ -181,6 +262,14 @@ export function parseTelemetryReport(
   const recent = list(body.recent, "recent", MAX_ITEMS.recent, event);
   const processes = list(pm2.processes, "pm2.processes", MAX_ITEMS.processes, service);
 
+  const planning = parsePlanning(body.planning);
+  const felix = Array.isArray(body.felix)
+    ? body.felix.slice(0, 10).flatMap((item) => {
+        const alert = parseAlert(item);
+        return alert ? [alert] : [];
+      })
+    : [];
+
   if (errors.length > 0 || !generatedAt || processesAvailable === null || !pm2State) return { ok: false, errors };
   return {
     ok: true,
@@ -192,6 +281,8 @@ export function parseTelemetryReport(
       agents,
       recent,
       pm2: { state: pm2State, processes },
+      planning,
+      felix,
     },
   };
 }

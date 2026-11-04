@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, OrthographicCamera } from "@react-three/drei";
 import { AgentsPanel } from "@/components/hub/AgentsPanel";
+import { CityLife } from "@/components/hub/CityLife";
 import { FleetHud } from "@/components/hub/FleetHud";
 import { Ground } from "@/components/hub/Ground";
 import { NetworkLinks } from "@/components/hub/NetworkLinks";
@@ -86,6 +87,7 @@ export default function Home() {
         <Ground />
         <NetworkLinks sites={sites} />
         <TrafficSystem sites={sites} />
+        <CityLife sites={sites} portal={overlay} />
         {sites.map((site) => (
           <SiteNode
             key={site.id}
