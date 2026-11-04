@@ -9,9 +9,9 @@
 #
 # Ports : aucun module ne publie de port vers l'hôte Windows. Le trafic public entre par le tunnel Cloudflare,
 # seul conteneur exposé. Les hostnames du tunnel pointent vers les noms de service Docker (calcom:3000,
-# chatwoot-web:3000) : ils se configurent dans le tableau de bord Cloudflare Zero Trust, pas ici.
-# Exceptions, liées à 127.0.0.1 pour l'application Securium 360 lancée sur l'hôte : securium-360-db (5433)
-# et securium-redis (6379).
+# chatwoot-web:3000, securium-360-app:3000) : ils se configurent dans le tableau de bord Cloudflare Zero Trust,
+# pas ici. Exceptions, liées à 127.0.0.1 pour les migrations et le développement de Securium 360 sur l'hôte :
+# securium-360-db (5433) et securium-redis (6379).
 
 name: securium-ecosystem
 
@@ -381,9 +381,42 @@ services:
 #        condition: service_started
 #    networks: [app, ai]
 
-  # Securium 360 : base PostgreSQL et cache Redis de l'application SaaS (dépôt securium-360).
-  # Liés à 127.0.0.1 : seule l'application lancée sur l'hôte s'y connecte. Réseau par défaut, distinct du réseau
-  # app, qui est interne et ne peut pas publier de port.
+  # Securium 360 : application SaaS (dépôt securium-360, voisin de securium-hub), sa base PostgreSQL et un cache Redis.
+  # Réseaux :
+  #   default : réseau ordinaire, propre à Securium 360. L'application y joint sa base et sort vers Stripe et Discord.
+  #             Les autres modules n'y sont pas : ils ne voient pas la base 360.
+  #   app     : cloudflared y joint l'application (securium-360-app:3000).
+  # Les ports 5433 et 6379, liés à 127.0.0.1, servent aux migrations et au développement sur l'hôte. Le réseau app,
+  # interne, ne peut pas publier de port : la base reste donc sur default.
+
+  # Image construite depuis le Dockerfile du dépôt : Next.js standalone, port 3000, utilisateur non root.
+  # Aucun port publié : le trafic public n'arrive que par cloudflared. Ce point d'entrée unique rend fiable l'en-tête
+  # CF-Connecting-IP, que lit la limitation de débit.
+  # Migrations : l'image standalone ne contient pas la CLI Prisma. Les appliquer depuis l'hôte, dans securium-360 :
+  #   DATABASE_URL="postgresql://securium_admin:<DB_360_PASSWORD>@127.0.0.1:5433/securium360" npx prisma migrate deploy
+  securium-360-app:
+    build:
+      context: ${SECURIUM_360_PATH:-../../securium-360}
+      # NEXT_PUBLIC_* est figé dans le code client au build : changer ces valeurs impose de reconstruire l'image.
+      args:
+        NEXT_PUBLIC_APP_URL: ${SECURIUM_360_APP_URL:-https://360.securium-agency.fr}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${SECURIUM_360_STRIPE_PUBLISHABLE_KEY:-}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://securium_admin:${DB_360_PASSWORD:?renseigner DB_360_PASSWORD dans infra/.env}@securium-360-db:5432/securium360?schema=public
+      # Relue à l'exécution : le proxy en tire le domaine racine des vitrines (<slug>.360.securium-agency.fr).
+      NEXT_PUBLIC_APP_URL: ${SECURIUM_360_APP_URL:-https://360.securium-agency.fr}
+      # Optionnels : sans valeur, les routes Stripe et /api/track-demo répondent 503 au lieu de planter.
+      STRIPE_SECRET_KEY: ${SECURIUM_360_STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${SECURIUM_360_STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_SUBSCRIPTION: ${SECURIUM_360_STRIPE_PRICE_SUBSCRIPTION:-}
+      STRIPE_PRICE_SETUP_FEE: ${SECURIUM_360_STRIPE_PRICE_SETUP_FEE:-}
+      DISCORD_TRACKER_WEBHOOK: ${SECURIUM_360_DISCORD_TRACKER_WEBHOOK:-}
+    depends_on:
+      securium-360-db:
+        condition: service_healthy
+    networks: [default, app]
+
   securium-360-db:
     image: postgres:16-alpine
     container_name: securium-360-postgres
@@ -396,6 +429,12 @@ services:
       - "127.0.0.1:5433:5432"
     volumes:
       - D:/securium-data/postgres-360:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [default]
 
   # Sans mot de passe, lié à 127.0.0.1 uniquement. Cache sans persistance : aucun volume.
   securium-redis:
@@ -406,6 +445,13 @@ services:
 
   # Tunnel Cloudflare (Zero Trust) : seul conteneur qui reçoit le trafic public. Il relaie vers les modules
   # par le réseau app. Le token vient du tableau de bord Cloudflare (Zero Trust > Networks > Tunnels).
+  # Tunnel piloté à distance : les routes se déclarent dans l'onglet « Public Hostname » du tunnel, pas ici.
+  # Securium 360 :
+  #   360.securium-agency.fr     -> HTTP  securium-360-app:3000
+  #   *.360.securium-agency.fr   -> HTTP  securium-360-app:3000   (vitrines par sous-domaine, facultatif)
+  # Le joker de second niveau exige un certificat Advanced Certificate Manager : le certificat universel de
+  # Cloudflare ne couvre que *.securium-agency.fr. Sans lui, les vitrines restent servies en 360.securium-agency.fr/<slug>.
+  # Pas de Cloudflare Access sur ces hostnames : vitrines publiques et webhooks Stripe doivent passer.
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run
