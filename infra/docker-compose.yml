@@ -401,6 +401,7 @@ services:
       args:
         NEXT_PUBLIC_APP_URL: ${SECURIUM_360_APP_URL:-https://360.securium-agency.fr}
         NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${SECURIUM_360_STRIPE_PUBLISHABLE_KEY:-}
+        NEXT_PUBLIC_CONTACT_EMAIL: ${SECURIUM_360_CONTACT_EMAIL:-}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://securium_admin:${DB_360_PASSWORD:?renseigner DB_360_PASSWORD dans infra/.env}@securium-360-db:5432/securium360?schema=public
