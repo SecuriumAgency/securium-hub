@@ -5,6 +5,7 @@ import { DraftsPanel } from "@/components/admin/DraftsPanel";
 import { KanbanBoard } from "@/components/admin/KanbanBoard";
 import { OutreachTabs, type OutreachView } from "@/components/admin/OutreachTabs";
 import { ProspectHistory } from "@/components/admin/ProspectHistory";
+import { ProspectorRunsPanel } from "@/components/admin/ProspectorRunsPanel";
 import { SegmentDraftsPanel } from "@/components/admin/SegmentDraftsPanel";
 import { DRAFT_STATUS } from "@/lib/chasseur";
 import { MAX_KANBAN_LEADS } from "@/lib/kanban";
@@ -99,6 +100,8 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
           }
           suivi={
             <>
+              <ProspectorRunsPanel />
+
               <DraftsPanel />
 
               <SegmentDraftsPanel />
