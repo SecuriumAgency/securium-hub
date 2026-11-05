@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Image from "next/image";
 import { Download, Loader2, Sparkles } from "lucide-react";
+import { SuggestionChips, type Suggestion } from "@/components/admin/SuggestionChips";
 
 const glass = "rounded-2xl border border-white/10 bg-card/60 p-4 shadow-lg shadow-black/20 backdrop-blur-md md:p-6";
 const titreSection = "text-sm font-semibold uppercase tracking-wider text-primary";
@@ -14,6 +15,14 @@ const FORMATS = [
   { value: "portrait", label: "Portrait · 512 × 768", width: 512, height: 768 },
   { value: "paysage", label: "Paysage · 768 × 512", width: 768, height: 512 },
 ] as const;
+
+// Prompts types, pré-sélectionnables : un clic remplit la description, qui reste modifiable.
+const PROMPT_SUGGESTIONS: Suggestion[] = [
+  { id: "maison", label: "Maison rénovée", value: "maison individuelle rénovée, façade blanche, pompe à chaleur air-eau, lumière douce de fin de journée, photographie architecturale" },
+  { id: "combles", label: "Combles isolés", value: "combles isolés, laine de roche, charpente en bois, lumière d'atelier, vue détaillée, réalisme" },
+  { id: "chantier", label: "Chantier soigné", value: "chantier de rénovation énergétique soigné, artisan en tenue de travail, matériel rangé, lumière naturelle" },
+  { id: "logo", label: "Icône ambre", value: "icône minimaliste sur fond sombre, touches ambrées, style logo moderne, vectoriel net" },
+];
 
 type Statut = "inactif" | "en-cours" | "termine" | "erreur";
 
@@ -67,6 +76,8 @@ export function ImageStudio() {
             className={champ}
           />
         </label>
+
+        <SuggestionChips label="Suggestions de prompt" options={PROMPT_SUGGESTIONS} selected={prompt} onSelect={setPrompt} />
 
         <label className="flex flex-col gap-2 text-sm text-muted-foreground">
           Format

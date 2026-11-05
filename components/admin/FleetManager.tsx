@@ -1,4 +1,8 @@
+"use client";
+
 import { ExternalLink, Plus } from "lucide-react";
+import { MobileSort, SortHeader, type SortColumn } from "@/components/admin/SortControls";
+import { useSort, type Accessors } from "@/components/admin/useSort";
 import { formatNumber, type Site, type SiteStatus } from "@/lib/sites";
 
 export type FleetRow = { site: Site; status: SiteStatus; leadsThisMonth: number; leadsTotal: number };
@@ -10,7 +14,25 @@ const statusStyle: Record<SiteStatus, string> = {
   unknown: "border-border bg-muted text-muted-foreground",
 };
 
-const columns = ["ID du site", "Nom du client", "URL de production", "Statut", "Leads générés"];
+type FleetKey = "id" | "name" | "url" | "status" | "leads";
+
+// Accesseurs de tri : constantes de module, pour que le tri ne se recalcule que quand les données changent.
+const FLEET_ACCESSORS: Accessors<FleetRow, FleetKey> = {
+  id: (row) => row.site.id,
+  name: (row) => row.site.name,
+  url: (row) => row.site.url ?? "",
+  status: (row) => statusLabel[row.status],
+  leads: (row) => row.leadsTotal,
+};
+
+const FLEET_COLUMNS: SortColumn<FleetKey>[] = [
+  { key: "id", label: "ID du site" },
+  { key: "name", label: "Nom du client" },
+  { key: "url", label: "URL de production" },
+  { key: "status", label: "Statut" },
+  { key: "leads", label: "Leads générés", defaultDirection: "desc" },
+];
+
 const contactLink = "inline-flex min-h-[44px] max-w-full items-center text-foreground transition-colors hover:text-primary";
 const code = "rounded bg-muted px-1 font-mono text-xs text-foreground";
 
@@ -46,12 +68,12 @@ function LeadsCount({ row }: { row: FleetRow }) {
   );
 }
 
-// Mode d'emploi pour ajouter un site à l'écosystème. Replié par défaut, sans JavaScript.
+// Mode d'emploi pour ajouter un site à l'écosystème. Replié par défaut.
 function NewSiteGuide() {
   return (
-    <details className="rounded-xl border border-border bg-card">
+    <details className="group rounded-xl border border-border bg-card transition-shadow duration-300 open:glow-amber">
       <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-xl px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
-        <Plus aria-hidden className="size-4" />
+        <Plus aria-hidden className="size-4 transition-transform duration-300 group-open:rotate-45" />
         Nouveau Site (Eco System)
       </summary>
       <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground">
@@ -85,8 +107,10 @@ function NewSiteGuide() {
   );
 }
 
-// Parc des sites : une ligne par site (tableau à partir de md, cartes en dessous). Statut et leads viennent de la page.
+// Parc des sites : une ligne par site, triable par colonne (tableau à partir de md, cartes en dessous).
 export function FleetManager({ rows }: { rows: FleetRow[] }) {
+  const { sorted, sort, sortBy, invert } = useSort<FleetRow, FleetKey>(rows, FLEET_ACCESSORS, { key: "leads", direction: "desc" });
+
   return (
     <section aria-labelledby="fleet-title" className="flex flex-col gap-4">
       <h2 id="fleet-title" className="text-lg font-semibold text-foreground md:text-xl">
@@ -95,8 +119,10 @@ export function FleetManager({ rows }: { rows: FleetRow[] }) {
 
       <NewSiteGuide />
 
+      <MobileSort columns={FLEET_COLUMNS} sort={sort} onSort={sortBy} onInvert={invert} />
+
       <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card md:hidden">
-        {rows.map((row) => (
+        {sorted.map((row) => (
           <li key={row.site.id} className="flex min-w-0 flex-col gap-1 p-4">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <h3 className="min-w-0 break-words text-base font-medium text-foreground">{row.site.name}</h3>
@@ -113,18 +139,16 @@ export function FleetManager({ rows }: { rows: FleetRow[] }) {
 
       <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
         <table className="w-full text-left text-sm">
-          <caption className="sr-only">Sites de l’écosystème, un par ligne, avec leur statut et leurs leads</caption>
+          <caption className="sr-only">Sites de l’écosystème, triés par {FLEET_COLUMNS.find((c) => c.key === sort.key)?.label.toLowerCase()}</caption>
           <thead className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              {columns.map((column) => (
-                <th key={column} scope="col" className="px-4 py-3 font-medium">
-                  {column}
-                </th>
+              {FLEET_COLUMNS.map((column) => (
+                <SortHeader key={column.key} column={column} sort={sort} onSort={sortBy} />
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {rows.map((row) => (
+            {sorted.map((row) => (
               <tr key={row.site.id} className="transition-colors hover:bg-muted">
                 <td className="whitespace-nowrap px-4 font-mono text-xs text-muted-foreground">{row.site.id}</td>
                 <td className="max-w-56 truncate px-4 font-medium text-foreground" title={row.site.name}>

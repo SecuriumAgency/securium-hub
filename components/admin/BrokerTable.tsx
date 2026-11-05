@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { calculateBatchDiscount, calculateSuggestedPrice, type LeadQuality } from "@/lib/broker/pricingEngine";
+import { MobileSort, SortHeader, type SortColumn } from "@/components/admin/SortControls";
+import { useSort, type Accessors } from "@/components/admin/useSort";
 
 // Lead Broker : leads disponibles, sélection multiple, vente à l'unité ou par lot.
 // Déterministe : aucun appel à un modèle. Le prix suggéré vient du moteur de pricing, il reste modifiable.
@@ -70,8 +72,35 @@ function BuyerBadges({ buyers }: { buyers: LeadBuyer[] }) {
   );
 }
 
+type LeadKey = "createdAt" | "name" | "phone" | "niche" | "region" | "urgency" | "quality" | "buyers";
+
+// Ordre des qualités : faible < moyen < fort. Accesseurs de tri : constantes de module.
+const QUALITY_RANK: Record<LeadQuality, number> = { FAIBLE: 1, MOYEN: 2, FORT: 3 };
+const LEAD_ACCESSORS: Accessors<BrokerLead, LeadKey> = {
+  createdAt: (lead) => Date.parse(lead.createdAt),
+  name: (lead) => lead.name,
+  phone: (lead) => lead.phone,
+  niche: (lead) => lead.niche.replace(/-/g, " "),
+  region: (lead) => lead.region ?? "",
+  urgency: (lead) => (lead.urgency ? (URGENCY_LABEL[lead.urgency] ?? lead.urgency) : ""),
+  quality: (lead) => QUALITY_RANK[lead.quality],
+  // Meilleur score d'abord, puis nombre d'acheteurs compatibles.
+  buyers: (lead) => (lead.buyers[0]?.score ?? 0) * 1000 + lead.buyers.length,
+};
+const LEAD_COLUMNS: SortColumn<LeadKey>[] = [
+  { key: "name", label: "Nom" },
+  { key: "phone", label: "Téléphone" },
+  { key: "niche", label: "Niche" },
+  { key: "region", label: "Département" },
+  { key: "urgency", label: "Urgence" },
+  { key: "quality", label: "Qualité", defaultDirection: "desc" },
+  { key: "createdAt", label: "Reçu le", defaultDirection: "desc" },
+  { key: "buyers", label: "Acheteurs compatibles", defaultDirection: "desc" },
+];
+
 export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
   const router = useRouter();
+  const { sorted, sort, sortBy, invert } = useSort<BrokerLead, LeadKey>(leads, LEAD_ACCESSORS, { key: "createdAt", direction: "desc" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"unit" | "batch">("unit");
@@ -206,15 +235,19 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                     className="size-5 accent-amber-400"
                   />
                 </th>
-                {["Nom", "Téléphone", "Niche", "Département", "Urgence", "Qualité", "Reçu le", "Acheteurs compatibles"].map((title) => (
-                  <th key={title} scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    {title}
-                  </th>
+                {LEAD_COLUMNS.map((column) => (
+                  <SortHeader
+                    key={column.key}
+                    column={column}
+                    sort={sort}
+                    onSort={sortBy}
+                    className="px-4 py-3 text-left text-xs font-semibold tracking-wider text-slate-400"
+                  />
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {leads.map((lead) => (
+              {sorted.map((lead) => (
                 <tr key={lead.id} className="transition-colors duration-200 hover:bg-slate-800/50">
                   <td className="px-4 py-3">
                     <input
@@ -244,8 +277,9 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
             </tbody>
           </table>
         </div>
+        <MobileSort columns={LEAD_COLUMNS} sort={sort} onSort={sortBy} onInvert={invert} />
         <ul className="flex flex-col gap-3 md:hidden">
-          {leads.map((lead) => (
+          {sorted.map((lead) => (
             <li
               key={lead.id}
               className={`rounded-2xl border p-4 ${selected.has(lead.id) ? "border-amber-400/60 bg-amber-400/10" : "border-white/10 bg-white/[0.03]"}`}
