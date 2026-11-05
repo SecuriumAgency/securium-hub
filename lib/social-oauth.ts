@@ -2,7 +2,12 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { buildAuthorizeUrl, exchangeCode, type OAuthApp } from "@/lib/agents/iafluencer";
 import type { SocialPlatform } from "@/lib/agents/iafluencer-rules";
-import { saveSocialAccount } from "@/lib/social-accounts";
+import { removeSocialAccount, saveSocialAccount } from "@/lib/social-accounts";
+
+const GRAPH = "https://graph.facebook.com/v21.0";
+const TIKTOK_USER_INFO = "https://open.tiktokapis.com/v2/user/info/?fields=display_name,username";
+const TIKTOK_REVOKE = "https://open.tiktokapis.com/v2/oauth/revoke/";
+const DELAI_RESEAU_MS = 5000;
 
 // Flux OAuth2 Instagram (Meta) et TikTok. Serveur uniquement : les secrets ne sortent jamais d'ici.
 // Les routes /api/auth/* restent derrière la session admin (middleware.ts).
@@ -55,7 +60,8 @@ function dashboardRedirect(request: NextRequest, platform: SocialPlatform, statu
   const url = new URL("/admin/iafluencer", request.url);
   url.searchParams.set("oauth", status);
   url.searchParams.set("platform", platform);
-  return NextResponse.redirect(url);
+  // 303 : une soumission de formulaire (déconnexion) doit être suivie en GET.
+  return NextResponse.redirect(url, 303);
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -100,11 +106,79 @@ export async function completeOAuth(request: NextRequest, platform: SocialPlatfo
 
   try {
     const tokens = await exchangeCode(platform, app, code);
-    await saveSocialAccount(platform, tokens);
+    const accountName = await fetchAccountName(platform, tokens.accessToken);
+    await saveSocialAccount(platform, tokens, accountName);
     return clear(dashboardRedirect(request, platform, "ok"));
   } catch (error) {
     // Seul le message d'erreur sort dans les journaux : ni jeton, ni secret, ni corps de réponse.
     console.error(`[oauth:${platform}] échec :`, error instanceof Error ? error.message : "erreur inconnue");
     return clear(dashboardRedirect(request, platform, "echec"));
+  }
+}
+
+/** Nom d'affichage du compte, sans @, ou null. Best-effort : une erreur ne bloque jamais la connexion. */
+async function fetchAccountName(platform: SocialPlatform, accessToken: string): Promise<string | null> {
+  try {
+    const signal = AbortSignal.timeout(DELAI_RESEAU_MS);
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    if (platform === "instagram") {
+      // Le compte Instagram professionnel est rattaché à une page Facebook.
+      const response = await fetch(`${GRAPH}/me/accounts?fields=instagram_business_account{username}`, {
+        headers,
+        redirect: "error",
+        signal,
+      });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { data?: { instagram_business_account?: { username?: unknown } }[] };
+      const username = body.data?.map((page) => page.instagram_business_account?.username).find((value) => typeof value === "string");
+      return typeof username === "string" ? username : null;
+    }
+    const response = await fetch(TIKTOK_USER_INFO, { headers, redirect: "error", signal });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { data?: { user?: { username?: unknown; display_name?: unknown } } };
+    const user = body.data?.user;
+    if (typeof user?.username === "string") return user.username;
+    return typeof user?.display_name === "string" ? user.display_name : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Révoque l'accès chez le fournisseur. Best-effort : la suppression en base a déjà eu lieu. */
+async function revokeAtProvider(platform: SocialPlatform, accessToken: string, app: OAuthApp | null): Promise<void> {
+  try {
+    const signal = AbortSignal.timeout(DELAI_RESEAU_MS);
+    const response =
+      platform === "instagram"
+        ? await fetch(`${GRAPH}/me/permissions`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${accessToken}` },
+            redirect: "error",
+            signal,
+          })
+        : app
+          ? await fetch(TIKTOK_REVOKE, {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({ client_key: app.clientId, client_secret: app.clientSecret, token: accessToken }),
+              redirect: "error",
+              signal,
+            })
+          : null;
+    if (response && !response.ok) console.error(`[oauth:${platform}] révocation refusée (HTTP ${response.status}).`);
+  } catch (error) {
+    console.error(`[oauth:${platform}] révocation non confirmée :`, error instanceof Error ? error.message : "erreur inconnue");
+  }
+}
+
+/** Déconnexion : supprime le compte et son jeton en base, puis révoque l'accès chez le fournisseur. */
+export async function disconnectOAuth(request: NextRequest, platform: SocialPlatform): Promise<NextResponse> {
+  try {
+    const accessToken = await removeSocialAccount(platform);
+    if (accessToken) await revokeAtProvider(platform, accessToken, oauthAppFor(platform));
+    return dashboardRedirect(request, platform, "deconnecte");
+  } catch (error) {
+    console.error(`[oauth:${platform}] déconnexion impossible :`, error instanceof Error ? error.message : "erreur inconnue");
+    return dashboardRedirect(request, platform, "echec");
   }
 }

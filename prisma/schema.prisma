@@ -184,6 +184,8 @@ model SocialAccount {
   accessToken  String
   refreshToken String?
   expiresAt    DateTime?
+  // Nom d affichage du compte (@username), lu à la connexion. Vide si la plateforme ne le renvoie pas.
+  accountName  String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
