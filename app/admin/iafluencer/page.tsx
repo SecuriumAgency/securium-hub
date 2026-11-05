@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { IAfluencerStudio, type ConnectionState } from "@/components/admin/IAfluencerStudio";
+import { PageHeader } from "@/components/admin/PageHeader";
 import { InstagramIcon, TikTokIcon } from "@/components/ui/SocialIcons";
 import { PLATFORM_LABELS, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/agents/iafluencer-rules";
 import { readBio, readSettings } from "@/lib/iafluencer-engine";
@@ -139,18 +140,18 @@ export default async function IAfluencerPage({ searchParams }: { searchParams: P
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:gap-8 md:p-6">
         <AdminNav />
 
-        <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">Social media automation</p>
-            <h1 className="text-2xl font-semibold text-foreground md:text-4xl">IAfluencer</h1>
-            <p className="text-sm text-muted-foreground">Rushs, biographie et calendrier des publications.</p>
-          </div>
-          <ul aria-label="Connexions" className="flex flex-col gap-2 md:items-end">
-            {SOCIAL_PLATFORMS.map((value) => (
-              <ConnectionControl key={value} platform={value} state={connections[value]} profile={accounts.get(value)} />
-            ))}
-          </ul>
-        </header>
+        <PageHeader
+          eyebrow="Social media automation"
+          title="IAfluencer"
+          description="Rushs, biographie et calendrier des publications."
+          aside={
+            <ul aria-label="Connexions" className="flex flex-col gap-2 md:items-end">
+              {SOCIAL_PLATFORMS.map((value) => (
+                <ConnectionControl key={value} platform={value} state={connections[value]} profile={accounts.get(value)} />
+              ))}
+            </ul>
+          }
+        />
 
         {feedback && (
           <p role="status" className="glass-panel rounded-xl px-4 py-3 text-sm text-foreground">

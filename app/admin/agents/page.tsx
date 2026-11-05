@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AgentsControlRoom, type CockpitCard, type ProcessRow, type TelemetryRow } from "@/components/admin/AgentsControlRoom";
 import type { TabItem } from "@/components/admin/AgentTabs";
+import { LiveRefresh } from "@/components/admin/LiveRefresh";
+import { PageHeader } from "@/components/admin/PageHeader";
 import { AGENTS } from "@/lib/agents/registry";
 import { agentState } from "@/lib/agents/status";
 import { readStoredReport, STALE_AFTER_MS } from "@/lib/telemetry-store";
@@ -10,7 +12,7 @@ export const metadata: Metadata = {
   title: "Escadron Agents · Securium Core",
 };
 
-// Lue à chaque visite, derrière la session admin (middleware.ts) : le rapport du poste change toutes les 10 s.
+// Lue à chaque visite, derrière la session admin (middleware.ts) : le rapport du poste change en continu.
 export const dynamic = "force-dynamic";
 
 // Heure de Paris imposée : le Hub et le poste ne sont pas dans le même fuseau d'affichage.
@@ -50,14 +52,17 @@ export default async function AgentsPage() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:gap-8 md:p-6">
         <AdminNav />
 
-        <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-foreground md:text-4xl">Escadron Agents</h1>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-semibold tabular-nums text-foreground">{running}</span> en cours ·{" "}
-            <span className="font-semibold tabular-nums text-foreground">{failing}</span> en erreur ·{" "}
-            <span className="font-semibold tabular-nums text-foreground">{AGENTS.length}</span> agents au catalogue
-          </p>
-        </header>
+        <PageHeader
+          title="Escadron Agents"
+          description={
+            <>
+              <span className="font-semibold tabular-nums text-foreground">{running}</span> en cours ·{" "}
+              <span className="font-semibold tabular-nums text-foreground">{failing}</span> en erreur ·{" "}
+              <span className="font-semibold tabular-nums text-foreground">{AGENTS.length}</span> agents au catalogue
+            </>
+          }
+          live={<LiveRefresh seconds={15} />}
+        />
 
         <AgentsControlRoom cards={cards} tabs={tabs} processes={processes} telemetry={telemetry} />
       </div>

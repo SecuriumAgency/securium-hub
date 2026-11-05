@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { FleetManager, type FleetRow } from "@/components/admin/FleetManager";
+import { LiveRefresh } from "@/components/admin/LiveRefresh";
+import { PageHeader } from "@/components/admin/PageHeader";
 import { FleetRunNote } from "@/components/admin/ScheduledRuns";
 import { FLEET_KEY, readSnapshot, type FleetSnapshot } from "@/lib/cron-store";
 import { startOfMonth } from "@/lib/month";
@@ -45,14 +47,19 @@ export default async function FleetPage() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:gap-8 md:p-6">
         <AdminNav />
 
-        <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-foreground md:text-4xl">Parc Sites</h1>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-semibold tabular-nums text-foreground">{rows.length}</span> sites ·{" "}
-            <span className="font-semibold tabular-nums text-foreground">{formatNumber(monthTotal)}</span> leads ce mois
-          </p>
-          <FleetRunNote snapshot={scheduled} />
-        </header>
+        <PageHeader
+          title="Parc Sites"
+          description={
+            <>
+              <span className="font-semibold tabular-nums text-foreground">{rows.length}</span> sites ·{" "}
+              <span className="font-semibold tabular-nums text-foreground">{formatNumber(monthTotal)}</span> leads ce mois
+              <span className="mt-2 block">
+                <FleetRunNote snapshot={scheduled} />
+              </span>
+            </>
+          }
+          live={<LiveRefresh seconds={60} />}
+        />
 
         <FleetManager rows={rows} />
       </div>

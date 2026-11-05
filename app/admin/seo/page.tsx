@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { SeoDashboard } from "@/components/admin/SeoDashboard";
 import { SeoRunTable } from "@/components/admin/ScheduledRuns";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { SectionTabs } from "@/components/admin/SectionTabs";
 import { readSnapshot, SEO_KEY, type SeoSnapshot } from "@/lib/cron-store";
 import { auditSite } from "@/lib/seo/audit";
 import type { SeoAudit } from "@/lib/seo/checks";
@@ -37,21 +39,33 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:gap-8 md:p-6">
         <AdminNav />
 
-        <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-foreground md:text-4xl">Audit SEO</h1>
-          <p className="text-sm text-muted-foreground">
-            Onze contrôles par site de la flotte, sur le HTML et les fichiers robots.txt et sitemap.xml du site.
-          </p>
-        </header>
-
-        <SeoDashboard
-          sites={sites.map(({ id, name }) => ({ id, name }))}
-          selectedId={selected?.id ?? null}
-          audit={audit}
-          error={error}
+        <PageHeader
+          title="Audit SEO"
+          description="Onze contrôles par site de la flotte, sur le HTML et les fichiers robots.txt et sitemap.xml du site."
         />
 
-        <SeoRunTable snapshot={scheduled} />
+        <SectionTabs
+          label="Sections de l'audit SEO"
+          tabs={[
+            {
+              id: "audit",
+              label: "Audit du site",
+              content: (
+                <SeoDashboard
+                  sites={sites.map(({ id, name }) => ({ id, name }))}
+                  selectedId={selected?.id ?? null}
+                  audit={audit}
+                  error={error}
+                />
+              ),
+            },
+            {
+              id: "executions",
+              label: "Exécutions planifiées",
+              content: <SeoRunTable snapshot={scheduled} />,
+            },
+          ]}
+        />
       </div>
     </main>
   );

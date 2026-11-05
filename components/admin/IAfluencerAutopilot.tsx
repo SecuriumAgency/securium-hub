@@ -1,9 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { SuggestionChips, type Suggestion } from "@/components/admin/SuggestionChips";
 
 // Direction artistique, voix de marque et interrupteurs de l'Auto-Pilote (Stories et Reels).
 // Enregistrés sur demande (POST /api/iafluencer/settings) ; le moteur les relit à chaque passage.
+
+// Suggestions pré-sélectionnables : un clic remplit le champ, le texte reste modifiable.
+const ART_SUGGESTIONS: Suggestion[] = [
+  { id: "cyber", label: "Cyberpunk minimaliste", value: "style cyberpunk minimaliste, couleurs sombres et ambre, setup de bureau tech, photoréaliste" },
+  { id: "atelier", label: "Atelier artisan", value: "lumière naturelle, matières bois et métal, ambiance d'atelier, couleurs chaudes, photo réaliste" },
+  { id: "chantier", label: "Chantier soigné", value: "chantier de rénovation soigné, équipe au travail, lumière de jour, couleurs neutres et vertes, reportage" },
+  { id: "editorial", label: "Éditorial clair", value: "fond blanc cassé, typographie sobre, beaucoup d'air, couleurs pastel, style éditorial" },
+];
+const VOICE_SUGGESTIONS: Suggestion[] = [
+  { id: "direct", label: "Direct et pédagogique", value: "direct, pédagogue, tutoiement amical, zéro jargon" },
+  { id: "expert", label: "Expert rassurant", value: "posé, expert, vouvoiement, chiffres à l'appui, rassurant" },
+  { id: "proche", label: "Proche et chaleureux", value: "chaleureux, proche, humour léger, phrases courtes" },
+];
 
 export type AutopilotSettings = {
   artDirection: string;
@@ -71,6 +85,12 @@ export function IAfluencerAutopilot({ initial }: { initial: AutopilotSettings })
           placeholder="Ex. : style cyberpunk minimaliste, couleurs sombres et ambre, setup de bureau tech, photoréaliste"
           className={FIELD}
         />
+        <SuggestionChips
+          label="Suggestions de direction artistique"
+          options={ART_SUGGESTIONS}
+          selected={settings.artDirection}
+          onSelect={(value) => setSettings((current) => ({ ...current, artDirection: value }))}
+        />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -84,6 +104,12 @@ export function IAfluencerAutopilot({ initial }: { initial: AutopilotSettings })
           onChange={(event) => setSettings((current) => ({ ...current, brandVoice: event.target.value }))}
           placeholder="Ex. : direct, pédagogue, tutoiement amical, zéro jargon"
           className={FIELD}
+        />
+        <SuggestionChips
+          label="Suggestions de voix de marque"
+          options={VOICE_SUGGESTIONS}
+          selected={settings.brandVoice}
+          onSelect={(value) => setSettings((current) => ({ ...current, brandVoice: value }))}
         />
       </div>
 
