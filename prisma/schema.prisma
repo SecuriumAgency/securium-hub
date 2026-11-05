@@ -168,3 +168,18 @@ model DailyReport {
   content    Bytes
   receivedAt DateTime @default(now())
 }
+
+// Compte social relié à IAfluencer (OAuth2 Instagram et TikTok). Les jetons sont chiffrés (lib/encryption.ts), jamais en clair.
+// Un compte par plateforme et par propriétaire. Propriétaire : l administrateur du Hub (ADMIN_OWNER_ID), faute de modèle utilisateur.
+model SocialAccount {
+  id           String    @id @default(cuid())
+  ownerId      String    @default("admin")
+  platform     String
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([ownerId, platform])
+}

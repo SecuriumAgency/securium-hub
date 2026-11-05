@@ -69,7 +69,7 @@ export function buildAuthorizeUrl(platform: SocialPlatform, app: Pick<OAuthApp, 
   return url.toString();
 }
 
-export type TokenSet = { accessToken: string; expiresInSec: number | null };
+export type TokenSet = { accessToken: string; expiresInSec: number | null; refreshToken: string | null };
 
 /** Échange le code d'autorisation contre un jeton. Le secret ne quitte que ce serveur. */
 export async function exchangeCode(
@@ -105,9 +105,13 @@ export async function exchangeCode(
     // On ne renvoie ni le corps ni le secret : seul le statut sort du serveur.
     throw new IAfluencerError(`Échange OAuth refusé par ${platform} (HTTP ${response.status}).`, response.status >= 500 ? 500 : 400);
   }
-  const body = (await response.json()) as { access_token?: unknown; expires_in?: unknown };
+  const body = (await response.json()) as { access_token?: unknown; expires_in?: unknown; refresh_token?: unknown };
   if (typeof body.access_token !== "string") throw new IAfluencerError(`Réponse ${platform} sans jeton.`, 500);
-  return { accessToken: body.access_token, expiresInSec: typeof body.expires_in === "number" ? body.expires_in : null };
+  return {
+    accessToken: body.access_token,
+    expiresInSec: typeof body.expires_in === "number" ? body.expires_in : null,
+    refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,
+  };
 }
 
 // ---------- Moteur ----------
