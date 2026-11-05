@@ -35,20 +35,24 @@ export function SortHeader<K extends string>({
   );
 }
 
+// Liste déroulante de tri. Par défaut visible sur mobile seulement, là où le tableau n'a pas de place ; `className`
+// permet de l'afficher partout (par exemple au-dessus d'une liste de cartes).
 export function MobileSort<K extends string>({
   columns,
   sort,
   onSort,
   onInvert,
+  className = "md:hidden",
 }: {
   columns: SortColumn<K>[];
   sort: SortState<K>;
   onSort: (key: K, defaultDirection?: SortDirection) => void;
   onInvert: () => void;
+  className?: string;
 }) {
   const Arrow = sort.direction === "asc" ? ArrowUp : ArrowDown;
   return (
-    <div className="flex items-center gap-2 md:hidden">
+    <div className={`flex items-center gap-2 ${className}`}>
       <label className="flex min-w-0 flex-1 items-center gap-2 text-sm text-muted-foreground">
         Trier par
         <select

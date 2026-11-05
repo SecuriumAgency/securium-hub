@@ -6,6 +6,8 @@ import { CalendarDays, Film, Plus, Upload } from "lucide-react";
 import { BIO_LIMITS, CAPTION_MAX, PLATFORM_LABELS, SOCIAL_PLATFORMS, bioErrors, type SocialPlatform } from "@/lib/agents/iafluencer-rules";
 import { validateUpload } from "@/lib/media/upload-rules";
 import { IAfluencerAutopilot, type AutopilotSettings } from "@/components/admin/IAfluencerAutopilot";
+import { MobileSort, type SortColumn } from "@/components/admin/SortControls";
+import { useSort, type Accessors } from "@/components/admin/useSort";
 
 // non_configuree : l'application OAuth n'a pas ses identifiants. non_connectee : identifiants présents, aucun compte relié.
 // connectee : compte relié.
@@ -69,7 +71,22 @@ function storageName(name: string): { pathname: string; contentType: "video/mp4"
   return { pathname: `rushs/${base}.${extension}`, contentType: extension === "mov" ? "video/quicktime" : "video/mp4" };
 }
 
+type RushKey = "createdAt" | "fileName" | "sizeMb";
+
+// Tri des rushs : constantes de module. Par défaut, le plus récent d'abord.
+const RUSH_ACCESSORS: Accessors<RushItem, RushKey> = {
+  createdAt: (rush) => Date.parse(rush.createdAt),
+  fileName: (rush) => rush.fileName,
+  sizeMb: (rush) => rush.sizeMb,
+};
+const RUSH_COLUMNS: SortColumn<RushKey>[] = [
+  { key: "createdAt", label: "Date de dépôt", defaultDirection: "desc" },
+  { key: "fileName", label: "Nom du fichier" },
+  { key: "sizeMb", label: "Taille", defaultDirection: "desc" },
+];
+
 function RushDropzone({ rushes, onRegistered }: { rushes: RushItem[]; onRegistered: () => Promise<void> }) {
+  const { sorted: sortedRushes, sort, sortBy, invert } = useSort<RushItem, RushKey>(rushes, RUSH_ACCESSORS, { key: "createdAt", direction: "desc" });
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -199,8 +216,10 @@ function RushDropzone({ rushes, onRegistered }: { rushes: RushItem[]; onRegister
       {rushes.length === 0 && active.length === 0 ? (
         <p className="text-sm text-muted-foreground">Aucun rush déposé pour le moment.</p>
       ) : (
+        <>
+          {rushes.length > 1 && <MobileSort columns={RUSH_COLUMNS} sort={sort} onSort={sortBy} onInvert={invert} className="" />}
         <ul className="flex flex-col divide-y divide-border">
-          {rushes.map((rush) => (
+          {sortedRushes.map((rush) => (
             <li key={rush.id} className="flex min-w-0 items-center gap-3 py-2.5">
               <Film aria-hidden className="size-4 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
@@ -212,6 +231,7 @@ function RushDropzone({ rushes, onRegistered }: { rushes: RushItem[]; onRegister
             </li>
           ))}
         </ul>
+        </>
       )}
     </section>
   );
