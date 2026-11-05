@@ -22,6 +22,7 @@ const EVENT_LABEL: Record<"active" | "paused" | "error", string> = {
 // Ce que la fiche dit de la façon de lancer l'agent, selon l'endroit où il tourne.
 function launchNote(agent: AgentDef): string {
   if (agent.kind === "poste") return "Cet agent tourne sur le poste Securium OS. Le Hub affiche son état, il ne le lance pas.";
+  if (agent.id === "chasseur") return "Lancé automatiquement par Vercel Cron, du lundi au vendredi. Il rédige, rien ne part sans validation humaine.";
   if (agent.kind === "hub") return "Script exécuté à la main depuis le poste. Le Hub ne le lance pas.";
   if (agent.kind === "web") return "Lancé depuis sa page dédiée du Hub.";
   return "Pas de bouton ici : ce workflow se déclenche sur événement GitHub.";

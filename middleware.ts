@@ -16,6 +16,7 @@ const PUBLIC_PATHS = new Set([
   "/api/leads/inbound",
   "/api/cron/fleet-status",
   "/api/cron/seo-audit",
+  "/api/cron/chasseur",
 ]);
 // En POST seulement : les rapports du daemon securium-fleet-watch, protégés par HUB_API_KEY, et
 // l'import des prospects (scripts/migrate-outreach.mts) et le lancement de workflows (/api/agents/trigger),

@@ -189,3 +189,10 @@ model SocialAccount {
 
   @@unique([ownerId, platform])
 }
+
+// Adresses désinscrites, reçues à chaque synchronisation (POST /api/outreach/import). Liste noire que
+// le Chasseur relit avant toute rédaction : une désinscription est une opposition définitive (RGPD).
+model OutreachBlocklist {
+  email     String   @id
+  createdAt DateTime @default(now())
+}

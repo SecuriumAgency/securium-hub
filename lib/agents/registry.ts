@@ -195,8 +195,8 @@ export const AGENTS: AgentDef[] = [
     mission: "Rédige un email par prospect à partir du brief. Rien ne part sans validation humaine.",
     inputs: ["Brief de l’agence (réglages)", "Prospects sans brouillon, au statut Nouveau"],
     outputs: ["Brouillons à valider dans l’onglet Suivi"],
-    schedule: "Manuel : agent-chasseur.mts et agent-chasseur-segments.mts",
-    source: "securium-hub/scripts/agent-chasseur.mts",
+    schedule: "Automatique : Vercel Cron, du lundi au vendredi à 8h UTC (9h à Paris en hiver)",
+    source: "securium-hub/lib/chasseur-run.ts (app/api/cron/chasseur)",
     links: [{ label: "Brouillons à valider", href: "/admin/outreach?vue=suivi" }],
   },
   {

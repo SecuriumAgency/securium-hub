@@ -50,6 +50,8 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       // Leurs brouillons partent avec eux (suppression en cascade).
       const { count: purged } = await tx.outreachProspect.deleteMany({ where: { email: { in: unsubscribedEmails } } });
+      // Liste noire gardée dans le Hub : le Chasseur tourne sans le poste et la relit avant de rédiger.
+      await tx.outreachBlocklist.createMany({ data: unsubscribedEmails.map((email) => ({ email })), skipDuplicates: true });
 
       const known = await tx.outreachProspect.findMany({
         where: { email: { in: prospects.map((prospect) => prospect.email) } },
