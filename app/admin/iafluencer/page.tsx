@@ -8,7 +8,7 @@ import { InstagramIcon, TikTokIcon } from "@/components/ui/SocialIcons";
 import { PLATFORM_LABELS, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/agents/iafluencer-rules";
 import { readBio, readSettings } from "@/lib/iafluencer-engine";
 import { connectedAccounts, type SocialProfile } from "@/lib/social-accounts";
-import { isPlatformConfigured } from "@/lib/social-oauth";
+import { isPlatformConfigured, missingVariables } from "@/lib/social-oauth";
 
 export const metadata: Metadata = {
   title: "IAfluencer · Securium Core",
@@ -48,7 +48,9 @@ async function loadConnections() {
     const state = accounts.has(platform) ? "connectee" : isPlatformConfigured(platform) ? "non_connectee" : "non_configuree";
     return [platform, state] as const;
   });
-  return { connections: Object.fromEntries(entries) as ConnectionState, accounts, databaseError };
+  // Variables manquantes par plateforme : affichées sur le bouton, pour savoir quoi ajouter sur Vercel.
+  const missing = Object.fromEntries(SOCIAL_PLATFORMS.map((platform) => [platform, missingVariables(platform)])) as Record<SocialPlatform, string[]>;
+  return { connections: Object.fromEntries(entries) as ConnectionState, accounts, databaseError, missing };
 }
 
 const BOUTON =
@@ -65,10 +67,12 @@ function ConnectionControl({
   platform,
   state,
   profile,
+  missing,
 }: {
   platform: SocialPlatform;
   state: ConnectionState[SocialPlatform];
   profile: SocialProfile | undefined;
+  missing: string[];
 }) {
   const label = PLATFORM_LABELS[platform];
   if (state === "connectee") {
@@ -121,6 +125,7 @@ function ConnectionControl({
       <span aria-disabled="true" className={DESACTIVE}>
         <PlatformIcon platform={platform} className="size-4" />
         {label} · application non configurée
+        {missing.length > 0 && <span className="text-xs text-slate-400">(manque : {missing.join(", ")})</span>}
       </span>
     </li>
   );
@@ -128,7 +133,7 @@ function ConnectionControl({
 
 export default async function IAfluencerPage({ searchParams }: { searchParams: Promise<Search> }) {
   const params = await searchParams;
-  const { connections, accounts, databaseError } = await loadConnections();
+  const { connections, accounts, databaseError, missing } = await loadConnections();
   // Réglages lus en base ; en cas d'échec, les valeurs par défaut (Auto-Pilote désactivé).
   const settings = await readSettings().catch(() => ({ artDirection: "", brandVoice: "", autopilotStories: false, autopilotReels: false }));
   const initialBio = await readBio().catch(() => "");
@@ -147,7 +152,7 @@ export default async function IAfluencerPage({ searchParams }: { searchParams: P
           aside={
             <ul aria-label="Connexions" className="flex flex-col gap-2 md:items-end">
               {SOCIAL_PLATFORMS.map((value) => (
-                <ConnectionControl key={value} platform={value} state={connections[value]} profile={accounts.get(value)} />
+                <ConnectionControl key={value} platform={value} state={connections[value]} profile={accounts.get(value)} missing={missing[value]} />
               ))}
             </ul>
           }

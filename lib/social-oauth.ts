@@ -32,6 +32,12 @@ export function oauthAppFor(platform: SocialPlatform): OAuthApp | null {
   return { clientId, clientSecret, redirectUri };
 }
 
+/** Noms des variables absentes ou sur « a_remplir » pour une plateforme. Vide = application configurée. */
+export function missingVariables(platform: SocialPlatform): string[] {
+  const names = VARIABLES[platform];
+  return [names.id, names.secret, names.redirect].filter((name) => readVariable(name) === null);
+}
+
 /** Vrai si l'application OAuth de la plateforme est renseignée (aucun appel réseau). */
 export function isPlatformConfigured(platform: SocialPlatform): boolean {
   return oauthAppFor(platform) !== null;
