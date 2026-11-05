@@ -78,7 +78,7 @@ export function AdminNav() {
 
   return (
     <nav aria-label="Administration" className="flex flex-wrap items-center justify-between gap-3">
-      <Link href="/admin/outreach" className="flex min-h-[44px] min-w-0 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-primary">
+      <Link href="/admin/command" className="flex min-h-[44px] min-w-0 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-primary">
         <Image
           src="/logo/securium-logo.png"
           alt=""

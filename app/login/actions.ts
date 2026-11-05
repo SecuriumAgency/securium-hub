@@ -57,5 +57,6 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
     path: "/",
     maxAge: SESSION_MAX_AGE_S,
   });
-  redirect("/");
+  // Après connexion, l'administrateur arrive sur la Batcave : le centre de commandement de Securium Core.
+  redirect("/admin/command");
 }
