@@ -21,6 +21,12 @@ model Lead {
   email     String?
   service   String
   source    String
+  // Parcours public /devis : NOUVEAU à la réception, puis le suivi commercial.
+  status    String   @default("NOUVEAU")
+  postalCode String?
+  region    String?
+  urgency   String?
+  message   String?
   createdAt DateTime @default(now())
 
   // Comptages par site et par période (GET /api/leads).

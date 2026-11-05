@@ -6,8 +6,11 @@ import { SESSION_COOKIE, sessionSecret, verifySessionToken } from "@/lib/session
 // Les tâches planifiées (Vercel Cron) appellent les routes /api/cron/* sans session : chaque route vérifie
 // CRON_SECRET. Vercel les appelle en GET.
 // robots.txt et sitemap.xml se lisent sans session : les moteurs de recherche les demandent sans cookie.
+// /devis : tunnel de leads public, sans menu ni données du dashboard ; sa route POST /api/leads/public
+// est publique (voir PUBLIC_POSTS) et limitée en débit.
 const PUBLIC_PATHS = new Set([
   "/login",
+  "/devis",
   "/robots.txt",
   "/sitemap.xml",
   "/api/leads/inbound",
@@ -19,7 +22,13 @@ const PUBLIC_PATHS = new Set([
 // protégés par HUB_SECRET_KEY, vérifié dans la route. Le rapport quotidien du Chief Data Officer
 // (/api/reports/upload), protégé par HUB_API_KEY, vérifié dans la route.
 // GET /api/telemetry, lu par le HUD, reste derrière la session.
-const PUBLIC_POSTS = new Set(["/api/telemetry", "/api/outreach/import", "/api/agents/trigger", "/api/reports/upload"]);
+const PUBLIC_POSTS = new Set([
+  "/api/telemetry",
+  "/api/outreach/import",
+  "/api/agents/trigger",
+  "/api/reports/upload",
+  "/api/leads/public",
+]);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
