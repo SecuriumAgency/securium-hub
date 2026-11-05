@@ -42,6 +42,8 @@ export const PublicLeadSchema = z.object({
   region: z.string().regex(REGION_PATTERN).nullable(),
   urgency: z.enum(["immediat", "3_mois", "6_mois"]),
   message: z.string().trim().max(500).optional(),
+  // Accord facultatif à la cession des coordonnées à des artisans partenaires. Sans lui, le lead n'est jamais vendu.
+  shareConsent: z.boolean().optional(),
   postalCode: z.string().regex(/^\d{5}$/, "Code postal à 5 chiffres."),
   name: z.string().trim().min(2, "Nom trop court.").max(80),
   phone: z

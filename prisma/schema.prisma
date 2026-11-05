@@ -13,21 +13,21 @@ datasource db {
 
 // Lead reçu d'un site de la flotte via POST /api/leads/inbound.
 model Lead {
-  id        String   @id @default(cuid())
+  id         String   @id @default(cuid())
   // ID du site émetteur, tel que défini dans lib/mock-data.json (ex. "elite-depannage-34").
-  siteId    String
-  name      String
-  phone     String
-  email     String?
-  service   String
-  source    String
+  siteId     String
+  name       String
+  phone      String
+  email      String?
+  service    String
+  source     String
   // Parcours public /devis : NOUVEAU à la réception, puis le suivi commercial.
-  status    String   @default("NOUVEAU")
+  status     String   @default("NOUVEAU")
   postalCode String?
-  region    String?
-  urgency   String?
-  message   String?
-  createdAt DateTime @default(now())
+  region     String?
+  urgency    String?
+  message    String?
+  createdAt  DateTime @default(now())
 
   // Comptages par site et par période (GET /api/leads).
   @@index([siteId, createdAt])
@@ -81,6 +81,10 @@ model OutreachProspect {
   messages       OutreachMessage[]
   // Journal des envois de la séquence.
   emailSequences EmailSequence[]
+
+  // Leads capturés achetés par cet artisan, et lots reçus.
+  capturedLeads CapturedLead[]
+  leadBatches   LeadBatch[]
 
   @@index([createdAt])
 }
@@ -247,4 +251,52 @@ model Rush {
   sizeMb      Int
   contentType String
   createdAt   DateTime @default(now())
+}
+
+enum CapturedLeadStatus {
+  AVAILABLE
+  SOLD
+  REJECTED
+}
+
+enum LeadBatchStatus {
+  PENDING_PAYMENT
+  PAID
+}
+
+// Lead B2C capturé par le tunnel public (/devis). Vendu à un artisan, à l'unité ou par lot.
+// Une donnée n'est en vente que si la personne a accepté la cession (consentToShare).
+model CapturedLead {
+  id             String             @id @default(cuid())
+  name           String
+  phone          String
+  email          String?
+  niche          String
+  region         String?
+  postalCode     String?
+  urgency        String?
+  message        String?
+  consentToShare Boolean            @default(false)
+  status         CapturedLeadStatus @default(AVAILABLE)
+  price          Float?
+  buyerId        String?
+  buyer          OutreachProspect?  @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  batchId        String?
+  batch          LeadBatch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  soldAt         DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@index([status, consentToShare])
+}
+
+// Lot de leads vendus à un même artisan, en une seule facture.
+model LeadBatch {
+  id         String            @id @default(cuid())
+  name       String
+  totalPrice Float
+  status     LeadBatchStatus   @default(PENDING_PAYMENT)
+  buyerId    String?
+  buyer      OutreachProspect? @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  leads      CapturedLead[]
+  createdAt  DateTime          @default(now())
 }

@@ -24,6 +24,8 @@ export function DynamicLeadFunnel({ niche, region }: Props) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
+  // Accord facultatif : ses coordonnées peuvent être transmises à des artisans partenaires.
+  const [shareConsent, setShareConsent] = useState(false);
   // Champ piège : invisible pour une personne, rempli par les robots.
   const [website, setWebsite] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
@@ -52,6 +54,7 @@ export function DynamicLeadFunnel({ niche, region }: Props) {
           phone,
           email: email.trim() || undefined,
           consent: true,
+          shareConsent,
           website,
         }),
       });
@@ -227,6 +230,18 @@ export function DynamicLeadFunnel({ niche, region }: Props) {
               className="mt-1 size-5 shrink-0 accent-amber-400"
             />
             <span>J&apos;accepte d&apos;être recontacté au sujet de ma demande de devis.</span>
+          </label>
+
+          <label className="flex items-start gap-3 text-sm text-slate-400">
+            <input
+              type="checkbox"
+              checked={shareConsent}
+              onChange={(event) => setShareConsent(event.target.checked)}
+              className="mt-1 size-5 shrink-0 accent-amber-400"
+            />
+            <span>
+              J&apos;accepte que mes coordonnées soient transmises à des artisans partenaires de ma région, pour recevoir d&apos;autres devis (facultatif).
+            </span>
           </label>
 
           {error && (

@@ -52,21 +52,39 @@ export async function POST(request: NextRequest) {
   const lead = parsed.data;
 
   try {
-    await prisma.lead.create({
-      data: {
-        siteId: PUBLIC_SITE_ID,
-        name: lead.name,
-        phone: lead.phone,
-        email: lead.email ? lead.email : null,
-        service: lead.niche,
-        source: "devis-public",
-        status: "NOUVEAU",
-        postalCode: lead.postalCode,
-        region: lead.region,
-        urgency: lead.urgency,
-        message: lead.message ? lead.message : null,
-      },
-    });
+    const message = lead.message ? lead.message : null;
+    const email = lead.email ? lead.email : null;
+    // Deux écritures dans une transaction : le lead du Hub, et la fiche vendable du Lead Broker.
+    await prisma.$transaction([
+      prisma.lead.create({
+        data: {
+          siteId: PUBLIC_SITE_ID,
+          name: lead.name,
+          phone: lead.phone,
+          email,
+          service: lead.niche,
+          source: "devis-public",
+          status: "NOUVEAU",
+          postalCode: lead.postalCode,
+          region: lead.region,
+          urgency: lead.urgency,
+          message,
+        },
+      }),
+      prisma.capturedLead.create({
+        data: {
+          name: lead.name,
+          phone: lead.phone,
+          email,
+          niche: lead.niche,
+          region: lead.region,
+          postalCode: lead.postalCode,
+          urgency: lead.urgency,
+          message,
+          consentToShare: lead.shareConsent === true,
+        },
+      }),
+    ]);
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
     // Seul le message sort dans les journaux : pas de données personnelles.

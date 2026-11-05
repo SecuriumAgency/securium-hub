@@ -23,6 +23,7 @@ const LINKS: NavItem[] = [
   { href: "/admin/reels", label: "Reels Studio", icon: Clapperboard },
   { href: "/admin/iafluencer", label: "IAfluencer", icon: Video },
   { href: "/admin/image-studio", label: "Images locales", icon: ImageIcon },
+  { href: "/admin/broker", label: "Lead Broker", icon: Target },
   { href: "/admin/osint", label: "OSINT", icon: Globe },
   { href: "/admin/ecosystem", label: "Écosystème", icon: Layers },
   { href: "https://www.securium-labs.app", label: "Labs", icon: FlaskConical, external: true },
