@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Box, CalendarDays, Clapperboard, ExternalLink, FileText, FlaskConical, Factory, Globe, Image as ImageIcon, Layers, Menu, Monitor, Search, Target, X, type LucideIcon } from "lucide-react";
+import { Bot, Box, CalendarDays, Clapperboard, ExternalLink, FileText, FlaskConical, Factory, Globe, Image as ImageIcon, Layers, LayoutDashboard, Menu, Monitor, Search, Target, X, type LucideIcon } from "lucide-react";
 import { useOverlay } from "./use-overlay";
 
 // Une entrée sans `href` n'a pas encore de page : elle s'affiche avec la mention « Bientôt », sans lien.
@@ -13,6 +13,7 @@ type NavItem = { label: string; icon: LucideIcon; href?: string; external?: bool
 // Onglets de l'écosystème, dans l'ordre : la prospection d'abord, c'est la vue de travail. Les liens externes
 // ouvrent un nouvel onglet.
 const LINKS: NavItem[] = [
+  { href: "/admin/command", label: "Batcave", icon: LayoutDashboard },
   { href: "/admin/outreach", label: "Prospection", icon: Target },
   { href: "/admin/fleet", label: "Parc Sites", icon: Factory },
   { href: "/admin/agents", label: "Escadron Agents", icon: Bot },
@@ -31,8 +32,10 @@ const LINKS: NavItem[] = [
 ];
 
 const linkClass = (active: boolean) =>
-  `flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-lg px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
-    active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+  `flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-lg px-3 text-sm transition-all duration-300 focus-visible:outline-2 focus-visible:outline-primary ${
+    active
+      ? "bg-primary/10 text-primary shadow-[0_0_18px_-6px_color-mix(in_oklab,var(--primary)_55%,transparent)]"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground hover:shadow-[0_0_18px_-8px_color-mix(in_oklab,var(--primary)_40%,transparent)]"
   }`;
 
 function NavEntry({ item, pathname, onNavigate }: { item: NavItem; pathname: string; onNavigate?: () => void }) {
