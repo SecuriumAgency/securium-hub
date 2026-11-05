@@ -13,6 +13,9 @@ export type ArtisanRow = {
   activity: string | null;
   targetNiches: string[];
   targetZipCodes: string[];
+  // Vue inverse du matching : leads disponibles compatibles, et meilleur score (100 ou 80).
+  compatibleLeads?: number;
+  bestScore?: number | null;
 };
 
 const FIELD =
@@ -162,9 +165,18 @@ export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
                     selected ? "border-amber-400/60 bg-amber-400/10" : "border-white/10"
                   }`}
                 >
-                  <span className="min-w-0 truncate text-white">
-                    {artisan.company}
-                    {artisan.city ? ` · ${artisan.city}` : ""}
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-white">
+                      {artisan.company}
+                      {artisan.city ? ` · ${artisan.city}` : ""}
+                    </span>
+                    {artisan.compatibleLeads !== undefined && (
+                      <span className={`truncate text-xs ${artisan.compatibleLeads > 0 ? "text-emerald-300" : "text-slate-500"}`}>
+                        {artisan.compatibleLeads} lead{artisan.compatibleLeads > 1 || artisan.compatibleLeads === 0 ? "s" : ""} compatible
+                        {artisan.compatibleLeads > 1 || artisan.compatibleLeads === 0 ? "s" : ""}
+                        {artisan.bestScore ? ` · meilleur ${artisan.bestScore} %` : ""}
+                      </span>
+                    )}
                   </span>
                   <span
                     className={`shrink-0 rounded-md px-2 py-0.5 text-xs ${

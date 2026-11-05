@@ -3,11 +3,12 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { AgentSettingsForm } from "@/components/admin/AgentSettingsForm";
 import { DraftsPanel } from "@/components/admin/DraftsPanel";
 import { KanbanBoard } from "@/components/admin/KanbanBoard";
-import { WarmCallTable, type WarmCallRow } from "@/components/core/WarmCallTable";
 import { OutreachTabs, type OutreachView } from "@/components/admin/OutreachTabs";
-import { ProspectHistory } from "@/components/admin/ProspectHistory";
 import { ProspectorRunsPanel } from "@/components/admin/ProspectorRunsPanel";
+import { ProspectRegistry, type RegistryRow } from "@/components/admin/ProspectRegistry";
+import { SectionTabs } from "@/components/admin/SectionTabs";
 import { SegmentDraftsPanel } from "@/components/admin/SegmentDraftsPanel";
+import { WarmCallTable, type WarmCallRow } from "@/components/core/WarmCallTable";
 import { contactedProspectsWhere, DRAFT_STATUS } from "@/lib/chasseur";
 import { MAX_KANBAN_LEADS } from "@/lib/kanban";
 import { prisma } from "@/lib/prisma";
@@ -22,8 +23,6 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 const MAX_ROWS = 1000;
-// Heure de Paris imposée, comme le tableau des leads.
-const dateFormat = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short" });
 
 // Statuts du registre de securium-prospector, et celui des brouillons du Chasseur. Les autres restent neutres.
 const statusStyle: Record<string, string> = {
@@ -33,26 +32,8 @@ const statusStyle: Record<string, string> = {
 };
 const neutralStyle = "border-border bg-muted text-foreground";
 
-// Lien d'action (mailto, tel) : zone tactile de 44 px au moins, texte long coupé.
-const contactLink = "inline-flex min-h-[44px] max-w-full items-center truncate text-foreground transition-colors hover:text-primary";
-
-function StatusBadge({ status }: { status: string }) {
-  return <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs ${statusStyle[status] ?? neutralStyle}`}>{status}</span>;
-}
-
-type Prospect = Awaited<ReturnType<typeof prisma.outreachProspect.findMany>>[number];
-
-function PhoneLink({ phone }: { phone: string | null }) {
-  if (!phone) return <span className="text-muted-foreground">—</span>;
-  return (
-    <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className={`${contactLink} tabular-nums`}>
-      {phone}
-    </a>
-  );
-}
-
-// Prospection : le Kanban d'abord, puis le suivi (Live Tracking, brouillons et icebreakers, accroches, réglages
-// et registre). Mobile d'abord : cartes empilées, tableau à partir de md.
+// Prospection : le Kanban d'abord, puis le suivi, découpé en onglets (live, closing, registre, réglages).
+// Mobile d'abord : cartes empilées, tableau à partir de md.
 export default async function OutreachPage({ searchParams }: { searchParams: Promise<{ vue?: string }> }) {
   const { vue } = await searchParams;
   const initialView: OutreachView = vue === "suivi" ? "suivi" : "kanban";
@@ -76,6 +57,16 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
     activity: prospect.activity,
     sentAt: prospect.lastContactAt.toISOString(),
     callStatus: prospect.callStatus !== null && prospect.callStatus in CALL_STATUSES ? (prospect.callStatus as CallStatus) : null,
+  }));
+  const registryRows: RegistryRow[] = prospects.map((prospect) => ({
+    id: prospect.id,
+    company: prospect.company,
+    email: prospect.email,
+    phone: prospect.phone,
+    status: prospect.status,
+    source: prospect.source,
+    createdAt: prospect.createdAt.toISOString(),
+    lastContactAt: prospect.lastContactAt.toISOString(),
   }));
   const statuses = byStatus.sort((a, b) => b._count._all - a._count._all);
 
@@ -116,121 +107,73 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
             </>
           }
           suivi={
-            <>
-              <ProspectorRunsPanel />
-
-              <DraftsPanel />
-
-              <section aria-labelledby="warm-calling" className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1">
-                  <h2 id="warm-calling" className="text-lg font-semibold text-foreground">
-                    Pipeline de Closing (Warm Calling)
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {warmRows.length} prospect{warmRows.length > 1 ? "s" : ""} contacté{warmRows.length > 1 ? "s" : ""} par email, à rappeler au téléphone.
-                  </p>
-                </div>
-                <WarmCallTable rows={warmRows} />
-              </section>
-
-              <SegmentDraftsPanel />
-
-              <AgentSettingsForm />
-
-              <section aria-labelledby="prospects-title" className="flex flex-col gap-4">
-                <h2 id="prospects-title" className="text-lg font-semibold text-foreground md:text-xl">
-                  Prospects démarchés
-                </h2>
-
-                {total === 0 ? (
-                  <p className="rounded-xl border border-border bg-card p-4 text-center text-sm text-muted-foreground md:p-6">
-                    Aucun prospect importé. L&apos;historique s&apos;importe avec{" "}
-                    <span className="break-words font-mono text-foreground">node scripts/migrate-outreach.mts --send</span>.
-                  </p>
-                ) : (
-                  <>
-                    <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card md:hidden">
-                      {prospects.map((prospect) => (
-                        <ProspectItem key={prospect.id} prospect={prospect} />
-                      ))}
-                    </ul>
-
-                    <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
-                      <table className="w-full text-left text-sm">
-                        <caption className="sr-only">Prospects démarchés, du dernier contact le plus récent au plus ancien</caption>
-                        <thead className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                          <tr>
-                            {["Premier contact", "Dernier contact", "Entreprise", "Email", "Téléphone", "Statut", "Source", "Échanges"].map((column) => (
-                              <th key={column} scope="col" className="px-4 py-3 font-medium">
-                                {column}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {prospects.map((prospect) => (
-                            <tr key={prospect.id} className="transition-colors hover:bg-muted">
-                              <td className="whitespace-nowrap px-4 tabular-nums text-foreground">{dateFormat.format(prospect.createdAt)}</td>
-                              <td className="whitespace-nowrap px-4 tabular-nums text-muted-foreground">{dateFormat.format(prospect.lastContactAt)}</td>
-                              <td className="max-w-56 truncate px-4 font-medium text-foreground" title={prospect.company}>
-                                {prospect.company}
-                              </td>
-                              <td className="max-w-56 px-4" title={prospect.email}>
-                                <a href={`mailto:${prospect.email}`} className={contactLink}>
-                                  {prospect.email}
-                                </a>
-                              </td>
-                              <td className="whitespace-nowrap px-4">
-                                <PhoneLink phone={prospect.phone} />
-                              </td>
-                              <td className="whitespace-nowrap px-4">
-                                <StatusBadge status={prospect.status} />
-                              </td>
-                              <td className="max-w-40 truncate px-4 text-muted-foreground" title={prospect.source}>
-                                {prospect.source}
-                              </td>
-                              <td className="px-4 py-2">
-                                <ProspectHistory prospectId={prospect.id} company={prospect.company} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+            <SectionTabs
+              label="Sections du suivi"
+              tabs={[
+                {
+                  id: "live",
+                  label: "Live et brouillons",
+                  content: (
+                    <div className="flex flex-col gap-6 md:gap-8">
+                      <ProspectorRunsPanel />
+                      <DraftsPanel />
                     </div>
-                  </>
-                )}
-                {total > MAX_ROWS && (
-                  <p className="text-xs text-muted-foreground">
-                    {MAX_ROWS} prospects affichés sur {total}, du contact le plus récent au plus ancien.
-                  </p>
-                )}
-              </section>
-            </>
+                  ),
+                },
+                {
+                  id: "closing",
+                  label: "Closing",
+                  count: warmRows.length,
+                  content: (
+                    <section aria-labelledby="warm-calling" className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1">
+                        <h2 id="warm-calling" className="text-lg font-semibold text-foreground">
+                          Pipeline de closing (warm calling)
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          {warmRows.length} prospect{warmRows.length > 1 ? "s" : ""} contacté{warmRows.length > 1 ? "s" : ""} par email, à rappeler au téléphone.
+                        </p>
+                      </div>
+                      <WarmCallTable rows={warmRows} />
+                    </section>
+                  ),
+                },
+                {
+                  id: "registre",
+                  label: "Registre",
+                  count: total,
+                  content:
+                    total === 0 ? (
+                      <p className="rounded-xl border border-border bg-card p-4 text-center text-sm text-muted-foreground md:p-6">
+                        Aucun prospect importé. L&apos;historique s&apos;importe avec{" "}
+                        <span className="break-words font-mono text-foreground">node scripts/migrate-outreach.mts --send</span>.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        <ProspectRegistry rows={registryRows} />
+                        {total > MAX_ROWS && (
+                          <p className="text-xs text-muted-foreground">
+                            {MAX_ROWS} prospects affichés sur {total}, du contact le plus récent au plus ancien.
+                          </p>
+                        )}
+                      </div>
+                    ),
+                },
+                {
+                  id: "reglages",
+                  label: "Réglages",
+                  content: (
+                    <div className="flex flex-col gap-6 md:gap-8">
+                      <SegmentDraftsPanel />
+                      <AgentSettingsForm />
+                    </div>
+                  ),
+                },
+              ]}
+            />
           }
         />
       </div>
     </main>
-  );
-}
-
-// Carte d'un prospect, sur mobile : entreprise et statut, puis contacts et dates.
-function ProspectItem({ prospect }: { prospect: Prospect }) {
-  return (
-    <li className="flex min-w-0 flex-col gap-1 p-4">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <h3 className="min-w-0 break-words text-base font-medium text-foreground">{prospect.company}</h3>
-        <StatusBadge status={prospect.status} />
-      </div>
-      <a href={`mailto:${prospect.email}`} className={contactLink} title={prospect.email}>
-        {prospect.email}
-      </a>
-      <PhoneLink phone={prospect.phone} />
-      <p className="text-xs text-muted-foreground">
-        Premier contact {dateFormat.format(prospect.createdAt)} · dernier {dateFormat.format(prospect.lastContactAt)}
-      </p>
-      <div className="mt-2 flex">
-        <ProspectHistory prospectId={prospect.id} company={prospect.company} />
-      </div>
-    </li>
   );
 }
