@@ -61,11 +61,11 @@ export function buildAuthorizeUrl(
     url.searchParams.set("redirect_uri", app.redirectUri);
     url.searchParams.set("state", state);
     url.searchParams.set("response_type", "code");
-    // Permissions à valider lors de la revue d'application Meta. La gestion des commentaires
-    // (réponses de l'agent) en fait partie.
+    // instagram_manage_comments est retiré : Meta refuse ce scope tant que l'application n'a pas l'accès
+    // (revue d'application). Le réajouter ici une fois l'accès accordé, pour la gestion des commentaires.
     url.searchParams.set(
       "scope",
-      "instagram_basic,instagram_content_publish,instagram_manage_comments,pages_show_list,pages_read_engagement",
+      "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement",
     );
     return url.toString();
   }
