@@ -204,3 +204,36 @@ model OutreachBlocklist {
   email     String   @id
   createdAt DateTime @default(now())
 }
+
+// Publication IA : rush planifié par l'utilisateur ou contenu de l'Auto-Pilote. Publiée par la route /api/cron/publish.
+// Une légende générée est gardée ici : elle n'est jamais demandée une seconde fois à l'IA.
+model SocialPost {
+  id          String    @id @default(cuid())
+  platform    String
+  format      String
+  source      String
+  rushName    String?
+  niche       String?
+  mediaUrl    String?
+  mediaPrompt String?
+  caption     String?
+  scheduledAt DateTime
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  providerId  String?
+  error       String?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+}
+
+// Réglages de l'IAfluencer : direction artistique, voix de marque et interrupteurs de l'Auto-Pilote.
+model IAfluencerSettings {
+  id               String   @id
+  artDirection     String   @default("")
+  brandVoice       String   @default("")
+  autopilotStories Boolean  @default(false)
+  autopilotReels   Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+}

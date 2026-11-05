@@ -14,6 +14,7 @@ import {
   type SocialPlatform,
 } from "@/lib/agents/iafluencer-rules";
 import { MAX_RUSH_BYTES, validateUpload } from "@/lib/media/upload-rules";
+import { IAfluencerAutopilot, type AutopilotSettings } from "@/components/admin/IAfluencerAutopilot";
 
 // non_configuree : l'application OAuth n'a pas ses identifiants. non_connectee : identifiants présents, aucun compte relié.
 // connectee : compte relié (aucun flux ne le produit encore).
@@ -26,11 +27,11 @@ const fieldClass =
 const primaryButton =
   "inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 text-sm text-primary transition-all duration-300 hover:shadow-[0_0_18px_-6px_var(--primary)] focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none";
 
-export function IAfluencerStudio({ connections }: { connections: ConnectionState }) {
+export function IAfluencerStudio({ connections, settings }: { connections: ConnectionState; settings: AutopilotSettings }) {
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <RushDropzone />
-      <BrandControl connections={connections} />
+      <BrandControl connections={connections} settings={settings} />
       <ContentGrid />
     </div>
   );
@@ -137,7 +138,7 @@ function RushDropzone() {
 
 // ---------- Section 2 : biographie synchronisée ----------
 
-function BrandControl({ connections }: { connections: ConnectionState }) {
+function BrandControl({ connections, settings }: { connections: ConnectionState; settings: AutopilotSettings }) {
   const [bio, setBio] = useState("");
   const problems = SOCIAL_PLATFORMS.flatMap((platform) => bioErrors(platform, bio));
   // Synchronisation dès qu'au moins un réseau est relié ; elle ne vise que les réseaux connectés.
@@ -184,6 +185,8 @@ function BrandControl({ connections }: { connections: ConnectionState }) {
           {problems.join(" ")}
         </p>
       )}
+
+      <IAfluencerAutopilot initial={settings} />
 
       <div className="mt-auto flex flex-col gap-2">
         <button type="button" disabled={problems.length > 0 || !anyConnected} className={primaryButton}>
