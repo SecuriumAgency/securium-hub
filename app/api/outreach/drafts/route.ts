@@ -16,8 +16,8 @@ export async function GET() {
         where: { status: DRAFT_STATUS, draft: { isNot: null } },
         include: { draft: true },
       }),
-      prisma.outreachProspect.count(),
-      prisma.outreachProspect.count({ where: contactedProspectsWhere() }),
+      prisma.outreachProspect.count({ where: { isClient: false } }),
+      prisma.outreachProspect.count({ where: { isClient: false, ...contactedProspectsWhere() } }),
     ]);
     const drafts: DraftRecord[] = prospects
       .flatMap(({ draft, ...prospect }) =>

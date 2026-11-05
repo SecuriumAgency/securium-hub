@@ -88,7 +88,7 @@ try {
   }
 
   const prospects = await prisma.outreachProspect.findMany({
-    where: { status: NEW_STATUS },
+    where: { status: NEW_STATUS, isClient: false },
     include: { draft: { select: { id: true } } },
     orderBy: { createdAt: "asc" },
   });

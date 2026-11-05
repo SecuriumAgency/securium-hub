@@ -17,6 +17,7 @@ export type UpdateLeadStatusResult = { ok: true } | { ok: false; error: string }
 export async function getKanbanLeads() {
   if (!(await hasAdminSession())) throw new Error("Session admin requise.");
   return prisma.outreachProspect.findMany({
+    where: { isClient: false },
     select: {
       id: true,
       company: true,

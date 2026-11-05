@@ -113,6 +113,7 @@ try {
   }
 
   const prospects = await prisma.outreachProspect.findMany({
+    where: { isClient: false },
     include: {
       draft: { select: { id: true } },
       _count: { select: { messages: { where: { direction: chasseur.INBOUND } } } },

@@ -85,6 +85,8 @@ model OutreachProspect {
   // Ciblage du routage automatique : niches et codes postaux que l'artisan couvre.
   targetNiches   String[] @default([])
   targetZipCodes String[] @default([])
+  // Client du broker (ex. Geo Energy Habitat) : acheteur, jamais un prospect. Exclu du Kanban, des listes et des compteurs.
+  isClient       Boolean  @default(false)
   // Leads capturés achetés par cet artisan, et lots reçus.
   capturedLeads CapturedLead[]
   leadBatches   LeadBatch[]

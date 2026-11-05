@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 // raccourcis et workboard du jour.
 export default async function CommandPage() {
   const [prospects, contacted, followUps] = await Promise.all([
-    prisma.outreachProspect.count(),
-    prisma.outreachProspect.count({ where: { status: { in: [...CONTACTED_STATUSES] } } }),
-    prisma.outreachProspect.count({ where: { status: "Relance_1" } }),
+    prisma.outreachProspect.count({ where: { isClient: false } }),
+    prisma.outreachProspect.count({ where: { isClient: false, status: { in: [...CONTACTED_STATUSES] } } }),
+    prisma.outreachProspect.count({ where: { isClient: false, status: "Relance_1" } }),
   ]);
 
   return (

@@ -57,9 +57,9 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
   const { vue } = await searchParams;
   const initialView: OutreachView = vue === "suivi" ? "suivi" : "kanban";
   const [prospects, total, byStatus, leads, contacted] = await Promise.all([
-    prisma.outreachProspect.findMany({ orderBy: { lastContactAt: "desc" }, take: MAX_ROWS }),
-    prisma.outreachProspect.count(),
-    prisma.outreachProspect.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.outreachProspect.findMany({ where: { isClient: false }, orderBy: { lastContactAt: "desc" }, take: MAX_ROWS }),
+    prisma.outreachProspect.count({ where: { isClient: false } }),
+    prisma.outreachProspect.groupBy({ by: ["status"], where: { isClient: false }, _count: { _all: true } }),
     getKanbanLeads(),
     // Pipeline de closing : prospects déjà contactés par email, du plus récent au plus ancien.
     prisma.outreachProspect.findMany({

@@ -17,7 +17,11 @@ export type BrokerLead = {
   quality: LeadQuality;
   suggestedPrice: number | null;
   createdAt: string;
+  buyers: LeadBuyer[];
 };
+
+// Acheteur compatible avec un lead (niche et zone) : client du broker ou artisan.
+export type LeadBuyer = { id: string; company: string; isClient: boolean; score: number; label: string };
 
 // Artisan compatible avec tous les leads sélectionnés (niche et zone), renvoyé par /api/broker/match.
 export type EligibleArtisan = { id: string; company: string; city: string | null; score: number; label: string };
@@ -39,6 +43,32 @@ const FIELD =
   "min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30";
 const BUTTON =
   "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-700 bg-slate-800 px-4 text-sm font-medium text-white transition-all duration-300 hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-amber-400 disabled:opacity-50";
+
+// Acheteurs compatibles d'un lead : les meilleurs d'abord, avec leur score. Aucun acheteur = lead non vendable.
+function BuyerBadges({ buyers }: { buyers: LeadBuyer[] }) {
+  if (buyers.length === 0) {
+    return <span className="inline-flex rounded-md border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-xs text-red-200">Aucun acheteur compatible</span>;
+  }
+  const shown = buyers.slice(0, 3);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {shown.map((buyer) => (
+        <span
+          key={buyer.id}
+          title={buyer.label}
+          className={`inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
+            buyer.score === 100 ? "border border-emerald-600 bg-emerald-900/50 text-emerald-300" : "border border-orange-800 bg-orange-900/50 text-orange-300"
+          }`}
+        >
+          {buyer.isClient && <span className="font-semibold text-amber-200">Client ·</span>}
+          <span className="truncate">{buyer.company}</span>
+          <span className="tabular-nums">{buyer.score} %</span>
+        </span>
+      ))}
+      {buyers.length > shown.length && <span className="text-xs text-slate-400">+{buyers.length - shown.length}</span>}
+    </div>
+  );
+}
 
 export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
   const router = useRouter();
@@ -115,7 +145,7 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
-    if (!buyerId) return setMessage({ kind: "error", text: "Choisissez l'artisan acheteur." });
+    if (!buyerId) return setMessage({ kind: "error", text: "Choisissez l'acheteur." });
     if (mode === "unit" && !(unit > 0)) return setMessage({ kind: "error", text: "Prix unitaire invalide." });
     if (mode === "batch" && !(batch > 0)) return setMessage({ kind: "error", text: "Prix du lot invalide." });
     setBusy(true);
@@ -162,7 +192,8 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
           Aucun lead disponible à la vente. Seuls les leads dont la personne a accepté la cession apparaissent ici.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur">
+        <>
+        <div className="hidden overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur md:block">
           <table className="min-w-full divide-y divide-white/10">
             <thead className="bg-slate-900/60">
               <tr>
@@ -175,7 +206,7 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                     className="size-5 accent-amber-400"
                   />
                 </th>
-                {["Nom", "Téléphone", "Niche", "Département", "Urgence", "Qualité", "Reçu le"].map((title) => (
+                {["Nom", "Téléphone", "Niche", "Département", "Urgence", "Qualité", "Reçu le", "Acheteurs compatibles"].map((title) => (
                   <th key={title} scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                     {title}
                   </th>
@@ -205,11 +236,49 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm tabular-nums text-slate-400">{dateFormat.format(new Date(lead.createdAt))}</td>
+                  <td className="px-4 py-3">
+                    <BuyerBadges buyers={lead.buyers} />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <ul className="flex flex-col gap-3 md:hidden">
+          {leads.map((lead) => (
+            <li
+              key={lead.id}
+              className={`rounded-2xl border p-4 ${selected.has(lead.id) ? "border-amber-400/60 bg-amber-400/10" : "border-white/10 bg-white/[0.03]"}`}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  aria-label={`Sélectionner le lead ${lead.name}`}
+                  checked={selected.has(lead.id)}
+                  onChange={() => toggle(lead.id)}
+                  className="mt-1 size-5 shrink-0 accent-amber-400"
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 truncate text-sm font-medium text-white">{lead.name}</p>
+                    <span className={`inline-flex shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${QUALITY_BADGE[lead.quality].className}`}>
+                      {QUALITY_BADGE[lead.quality].label}
+                    </span>
+                  </div>
+                  <a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="text-sm tabular-nums text-amber-200 underline-offset-4 hover:underline">
+                    {lead.phone}
+                  </a>
+                  <p className="break-words text-xs text-slate-300">
+                    {lead.niche.replace(/-/g, " ")} · {lead.region ?? "—"} · {lead.urgency ? URGENCY_LABEL[lead.urgency] ?? lead.urgency : "—"}
+                  </p>
+                  <BuyerBadges buyers={lead.buyers} />
+                  <p className="text-xs tabular-nums text-slate-500">{dateFormat.format(new Date(lead.createdAt))}</p>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+        </>
       )}
 
       {count > 0 && (
@@ -272,7 +341,7 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
               )}
 
               <fieldset className="flex flex-col gap-2">
-                <legend className="mb-1 text-sm text-slate-300">Artisan acheteur compatible</legend>
+                <legend className="mb-1 text-sm text-slate-300">Acheteur compatible</legend>
                 {visibleArtisans.length === 0 ? (
                   <p className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">
                     Aucun artisan compatible avec cette sélection. Renseignez la niche et la zone de l&apos;artisan.

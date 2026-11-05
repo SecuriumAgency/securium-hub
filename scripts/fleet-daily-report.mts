@@ -60,8 +60,8 @@ try {
     leadsBySite(),
     // Sites sans projet Vercel (le QG) : statut fixe de lib/sites.ts.
     Promise.all(initialSites.map((site) => (token && site.vercelProject ? fetchDeploymentStatus(site.vercelProject, token) : site.status))),
-    prisma.outreachProspect.count(),
-    prisma.outreachProspect.count({ where: contactedProspectsWhere() }),
+    prisma.outreachProspect.count({ where: { isClient: false } }),
+    prisma.outreachProspect.count({ where: { isClient: false, ...contactedProspectsWhere() } }),
     prisma.outreachDraft.count(),
     prisma.outreachMessage.count({ where: { direction: OUTBOUND, createdAt: { gte: dayStart } } }),
     prisma.outreachMessage.count({ where: { direction: INBOUND, createdAt: { gte: dayStart } } }),
