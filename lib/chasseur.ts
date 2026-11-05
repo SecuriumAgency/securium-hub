@@ -68,7 +68,11 @@ export const MAX_BRIEF_LENGTH = 2000;
 
 export type AgentBrief = { productDescription: string; targetAudience: string };
 
-const BRIEF_FIELDS = { productDescription: "Ce que tu vends", targetAudience: "Ton client idéal" } as const;
+// Libellés affichés dans les messages d'erreur : ils suivent les libellés du formulaire.
+const BRIEF_FIELDS = {
+  productDescription: "Ton Approche Conseil (Valeur apportée)",
+  targetAudience: "Ta Niche Hyper-Ciblée (Problème & Secteur)",
+} as const;
 
 // Corps de POST /api/outreach/settings : deux textes requis, espaces retirés, longueur bornée.
 export function parseAgentBrief(body: unknown): { ok: true; brief: AgentBrief } | { ok: false; errors: string[] } {

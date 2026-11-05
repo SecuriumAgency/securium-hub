@@ -12,13 +12,13 @@ const dateFormat = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", 
 const FIELDS: { name: keyof AgentBrief; label: string; placeholder: string }[] = [
   {
     name: "productDescription",
-    label: "Ce que tu vends",
-    placeholder: "Ex. : refonte de sites vitrines rapides et pensés pour le mobile, avec formulaire de devis.",
+    label: "Ton Approche Conseil (Valeur apportée)",
+    placeholder: "Ex: Nous aidons les artisans à identifier leurs pertes de leads via un audit gratuit...",
   },
   {
     name: "targetAudience",
-    label: "Ton client idéal",
-    placeholder: "Ex. : artisans et commerces de proximité en Île-de-France, site daté ou absent.",
+    label: "Ta Niche Hyper-Ciblée (Problème & Secteur)",
+    placeholder: "Ex: Couvreur RGE dans le 95 fatigué d'acheter des leads partagés...",
   },
 ];
 
