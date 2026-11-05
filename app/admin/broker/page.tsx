@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { ArtisanTargets, type ArtisanRow } from "@/components/admin/ArtisanTargets";
 import { BrokerTable, type BrokerLead } from "@/components/admin/BrokerTable";
 import { prisma } from "@/lib/prisma";
 
@@ -11,14 +12,22 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function BrokerPage() {
-  // Les acheteurs ne sont plus listés ici : le tableau ne propose que les artisans compatibles avec la sélection.
-  const leads = await prisma.capturedLead.findMany({
+  // Artisans acheteurs et leurs critères. Le tableau ne propose que les artisans compatibles avec la sélection.
+  const [artisanRows, leads] = await Promise.all([
+    prisma.outreachProspect.findMany({
+      orderBy: { company: "asc" },
+      take: 1000,
+      select: { id: true, company: true, city: true, activity: true, targetNiches: true, targetZipCodes: true },
+    }),
+    prisma.capturedLead.findMany({
     where: { status: "AVAILABLE", consentToShare: true },
     orderBy: { createdAt: "desc" },
     take: 500,
-    select: { id: true, name: true, phone: true, niche: true, region: true, urgency: true, quality: true, suggestedPrice: true, createdAt: true },
-  });
+      select: { id: true, name: true, phone: true, niche: true, region: true, urgency: true, quality: true, suggestedPrice: true, createdAt: true },
+    }),
+  ]);
 
+  const artisans: ArtisanRow[] = artisanRows;
   const rows: BrokerLead[] = leads.map((lead) => ({
     id: lead.id,
     name: lead.name,
@@ -45,6 +54,8 @@ export default async function BrokerPage() {
         </header>
 
         <BrokerTable leads={rows} />
+
+        <ArtisanTargets artisans={artisans} />
       </div>
     </main>
   );
