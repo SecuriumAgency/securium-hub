@@ -18,6 +18,8 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/seo-audit",
   "/api/cron/publish",
   "/api/cron/chasseur",
+  // Fichier de vérification de domaine TikTok : TikTok le lit sans cookie. Seul ce chemin exact est ouvert.
+  "/api/auth/tiktok/callback/tiktoktzmiw1sr4b9DeMjCYXNSxJ3JSimF90QZ.txt",
 ]);
 // En POST seulement : les rapports du daemon securium-fleet-watch, protégés par HUB_API_KEY, et
 // l'import des prospects (scripts/migrate-outreach.mts) et le lancement de workflows (/api/agents/trigger),
