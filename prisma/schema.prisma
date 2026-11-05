@@ -82,6 +82,9 @@ model OutreachProspect {
   // Journal des envois de la séquence.
   emailSequences EmailSequence[]
 
+  // Ciblage du routage automatique : niches et codes postaux que l'artisan couvre.
+  targetNiches   String[] @default([])
+  targetZipCodes String[] @default([])
   // Leads capturés achetés par cet artisan, et lots reçus.
   capturedLeads CapturedLead[]
   leadBatches   LeadBatch[]
@@ -292,6 +295,7 @@ model CapturedLead {
   batchId        String?
   batch          LeadBatch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
   soldAt         DateTime?
+  stripeSessionId String? @unique
   createdAt      DateTime           @default(now())
 
   @@index([status, consentToShare])

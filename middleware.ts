@@ -30,6 +30,8 @@ const PUBLIC_POSTS = new Set([
   "/api/agents/trigger",
   "/api/reports/upload",
   "/api/leads/public",
+  // Stripe appelle ce webhook sans session : la signature est vérifiée dans la route.
+  "/api/webhooks/stripe",
 ]);
 
 export async function middleware(request: NextRequest) {
