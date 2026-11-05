@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { IAfluencerStudio, type ConnectionState } from "@/components/admin/IAfluencerStudio";
 import { InstagramIcon, TikTokIcon } from "@/components/ui/SocialIcons";
 import { PLATFORM_LABELS, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/agents/iafluencer-rules";
-import { connectedAccounts } from "@/lib/social-accounts";
+import { connectedAccounts, type SocialProfile } from "@/lib/social-accounts";
 import { isPlatformConfigured } from "@/lib/social-oauth";
 
 export const metadata: Metadata = {
@@ -22,6 +23,9 @@ const FEEDBACK: Record<string, string> = {
   etat_invalide: "Session de connexion expirée ou invalide : recommencez.",
   code_absent: "La plateforme n'a pas renvoyé d'autorisation.",
   non_configuree: "Application non configurée : renseignez ses variables dans .env.local ou Vercel.",
+  rafraichi: "Jeton rafraîchi.",
+  non_connecte: "Aucun compte relié à rafraîchir.",
+  echec_rafraichissement: "Rafraîchissement impossible : reconnectez le compte si le problème persiste.",
   echec: "Échec de l'opération : voir les journaux serveur.",
 };
 
@@ -30,7 +34,7 @@ type Search = { oauth?: string; platform?: string };
 // Lit les comptes en base. Si la lecture échoue, rien n'est affiché comme relié : le tableau de bord
 // reste utilisable et signale l'état inconnu.
 async function loadConnections() {
-  let accounts = new Map<SocialPlatform, string | null>();
+  let accounts = new Map<SocialPlatform, SocialProfile>();
   let databaseError = false;
   try {
     accounts = await connectedAccounts();
@@ -58,28 +62,45 @@ function PlatformIcon({ platform, className }: { platform: SocialPlatform; class
 function ConnectionControl({
   platform,
   state,
-  accountName,
+  profile,
 }: {
   platform: SocialPlatform;
   state: ConnectionState[SocialPlatform];
-  accountName: string | null | undefined;
+  profile: SocialProfile | undefined;
 }) {
   const label = PLATFORM_LABELS[platform];
   if (state === "connectee") {
+    const name = profile?.accountName;
+    const shown = name ? (platform === "instagram" ? `@${name}` : name) : "connecté";
     return (
       <li className="flex flex-wrap items-center gap-2">
-        <span className={PASTILLE}>
-          <PlatformIcon platform={platform} className="size-4" />
-          🟢 {label} : {accountName ? `@${accountName}` : "connecté"}
+        <span className={`${PASTILLE} pl-2`}>
+          {profile?.avatarUrl ? (
+            <Image src={profile.avatarUrl} alt="" width={28} height={28} unoptimized className="size-7 rounded-full object-cover" />
+          ) : (
+            <PlatformIcon platform={platform} className="size-4" />
+          )}
+          <span>
+            🟢 {label} : {shown}
+          </span>
         </span>
-        <form method="post" action={`/api/auth/${platform}/disconnect`}>
-          <button
-            type="submit"
-            className="min-h-[44px] rounded-xl border border-slate-700 px-4 text-sm text-slate-300 transition-all duration-300 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-primary"
-          >
-            Se déconnecter
-          </button>
-        </form>
+        <details className="relative">
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center rounded-xl border border-slate-700 px-3 text-sm text-slate-300 transition-all duration-300 hover:bg-slate-800 hover:text-white">
+            Compte ▾
+          </summary>
+          <div className="absolute right-0 z-10 mt-2 flex w-56 flex-col gap-1 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-lg">
+            <form method="post" action={`/api/auth/${platform}/refresh`}>
+              <button type="submit" className="min-h-[40px] w-full rounded-lg px-3 text-left text-sm text-slate-200 hover:bg-slate-800">
+                Rafraîchir le jeton
+              </button>
+            </form>
+            <form method="post" action={`/api/auth/${platform}/disconnect`}>
+              <button type="submit" className="min-h-[40px] w-full rounded-lg px-3 text-left text-sm text-red-300 hover:bg-slate-800">
+                Se déconnecter
+              </button>
+            </form>
+          </div>
+        </details>
       </li>
     );
   }
@@ -122,7 +143,7 @@ export default async function IAfluencerPage({ searchParams }: { searchParams: P
           </div>
           <ul aria-label="Connexions" className="flex flex-col gap-2 md:items-end">
             {SOCIAL_PLATFORMS.map((value) => (
-              <ConnectionControl key={value} platform={value} state={connections[value]} accountName={accounts.get(value)} />
+              <ConnectionControl key={value} platform={value} state={connections[value]} profile={accounts.get(value)} />
             ))}
           </ul>
         </header>

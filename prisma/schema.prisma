@@ -189,6 +189,9 @@ model SocialAccount {
   expiresAt    DateTime?
   // Nom d affichage du compte (@username), lu à la connexion. Vide si la plateforme ne le renvoie pas.
   accountName  String?
+  // Identifiant du compte chez la plateforme (id Instagram, open_id TikTok) et photo de profil.
+  externalId   String?
+  avatarUrl    String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

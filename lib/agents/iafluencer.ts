@@ -49,15 +49,24 @@ export const REPLY_PROMPT = `Tu réponds, au nom de la marque, à un commentaire
 export type OAuthApp = { clientId: string; clientSecret: string; redirectUri: string };
 
 /** Adresse d'autorisation à ouvrir dans le navigateur de l'utilisateur. `state` protège contre le détournement. */
-export function buildAuthorizeUrl(platform: SocialPlatform, app: Pick<OAuthApp, "clientId" | "redirectUri">, state: string): string {
+export function buildAuthorizeUrl(
+  platform: SocialPlatform,
+  app: Pick<OAuthApp, "clientId" | "redirectUri">,
+  state: string,
+  codeChallenge: string | null = null,
+): string {
   if (platform === "instagram") {
     const url = new URL(META_DIALOG);
     url.searchParams.set("client_id", app.clientId);
     url.searchParams.set("redirect_uri", app.redirectUri);
     url.searchParams.set("state", state);
     url.searchParams.set("response_type", "code");
-    // Permissions à valider lors de la revue d'application Meta.
-    url.searchParams.set("scope", "instagram_basic,instagram_content_publish,instagram_manage_comments,pages_show_list");
+    // Permissions à valider lors de la revue d'application Meta. La gestion des commentaires
+    // (réponses de l'agent) en fait partie.
+    url.searchParams.set(
+      "scope",
+      "instagram_basic,instagram_content_publish,instagram_manage_comments,pages_show_list,pages_read_engagement",
+    );
     return url.toString();
   }
   const url = new URL(TIKTOK_AUTHORIZE);
@@ -65,7 +74,12 @@ export function buildAuthorizeUrl(platform: SocialPlatform, app: Pick<OAuthApp, 
   url.searchParams.set("redirect_uri", app.redirectUri);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "user.info.basic,video.publish,video.upload");
+  url.searchParams.set("scope", "user.info.basic,video.upload,video.publish");
+  // PKCE (S256) : le vérifieur reste côté serveur, seul son empreinte part vers TikTok.
+  if (codeChallenge) {
+    url.searchParams.set("code_challenge", codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  }
   return url.toString();
 }
 
@@ -76,6 +90,7 @@ export async function exchangeCode(
   platform: SocialPlatform,
   app: OAuthApp,
   code: string,
+  codeVerifier: string | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<TokenSet> {
   let response: Response;
@@ -96,6 +111,7 @@ export async function exchangeCode(
         code,
         grant_type: "authorization_code",
         redirect_uri: app.redirectUri,
+        ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
       }),
       redirect: "error",
     });

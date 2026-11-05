@@ -140,7 +140,9 @@ function RushDropzone() {
 function BrandControl({ connections }: { connections: ConnectionState }) {
   const [bio, setBio] = useState("");
   const problems = SOCIAL_PLATFORMS.flatMap((platform) => bioErrors(platform, bio));
-  const allConnected = SOCIAL_PLATFORMS.every((platform) => connections[platform] === "connectee");
+  // Synchronisation dès qu'au moins un réseau est relié ; elle ne vise que les réseaux connectés.
+  const anyConnected = SOCIAL_PLATFORMS.some((platform) => connections[platform] === "connectee");
+  const connectedNames = SOCIAL_PLATFORMS.filter((platform) => connections[platform] === "connectee").map((platform) => PLATFORM_LABELS[platform]);
 
   return (
     <section aria-labelledby="brand-title" className={panelClass}>
@@ -184,13 +186,13 @@ function BrandControl({ connections }: { connections: ConnectionState }) {
       )}
 
       <div className="mt-auto flex flex-col gap-2">
-        <button type="button" disabled={problems.length > 0 || !allConnected} className={primaryButton}>
+        <button type="button" disabled={problems.length > 0 || !anyConnected} className={primaryButton}>
           Synchroniser sur Instagram et TikTok
         </button>
         <p className="text-xs text-muted-foreground">
-          {allConnected
-            ? "Synchronisation prête."
-            : "Synchronisation désactivée : les comptes ne sont pas encore connectés (voir l'état des connexions ci-dessus)."}
+          {anyConnected
+            ? `Synchronisation prête pour : ${connectedNames.join(", ")}.`
+            : "Synchronisation désactivée : aucun compte n'est encore connecté (voir l'état des connexions ci-dessus)."}
         </p>
       </div>
     </section>
