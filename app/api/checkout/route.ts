@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { evaluateMatch } from "@/lib/broker/matching";
 import { calculateSuggestedPrice } from "@/lib/broker/pricingEngine";
 import { stripeClient } from "@/lib/broker/stripe";
 import { prisma } from "@/lib/prisma";
@@ -32,12 +33,21 @@ export async function POST(request: NextRequest) {
   try {
     const lead = await prisma.capturedLead.findFirst({
       where: { id: leadId, status: "AVAILABLE", consentToShare: true },
-      select: { id: true, niche: true, region: true, quality: true, suggestedPrice: true },
+      select: { id: true, niche: true, region: true, postalCode: true, quality: true, suggestedPrice: true },
     });
     if (!lead) return NextResponse.json({ error: "Lead indisponible à la vente." }, { status: 409 });
 
-    const artisan = await prisma.outreachProspect.findUnique({ where: { id: artisanId }, select: { id: true } });
+    const artisan = await prisma.outreachProspect.findUnique({
+      where: { id: artisanId },
+      select: { id: true, targetNiches: true, targetZipCodes: true },
+    });
     if (!artisan) return NextResponse.json({ error: "Artisan introuvable." }, { status: 404 });
+
+    // Contrôle serveur anti-erreur et anti-fraude : seul un artisan compatible (niche et zone) peut payer ce lead.
+    const match = evaluateMatch(lead, artisan);
+    if (!match.eligible) {
+      return NextResponse.json({ error: `Artisan non compatible avec ce lead : ${match.label}.` }, { status: 400 });
+    }
 
     // Prix suggéré du lead, en centimes pour Stripe.
     const price = lead.suggestedPrice ?? calculateSuggestedPrice(lead.quality, lead.niche);

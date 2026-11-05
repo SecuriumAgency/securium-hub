@@ -19,7 +19,8 @@ export type BrokerLead = {
   createdAt: string;
 };
 
-export type BrokerBuyer = { id: string; company: string; city: string | null };
+// Artisan compatible avec tous les leads sélectionnés (niche et zone), renvoyé par /api/broker/match.
+export type EligibleArtisan = { id: string; company: string; city: string | null; score: number; label: string };
 
 const URGENCY_LABEL: Record<string, string> = { immediat: "Immédiat", "3_mois": "Dans 3 mois", "6_mois": "Dans 6 mois" };
 const QUALITY_BADGE: Record<LeadQuality, { label: string; className: string }> = {
@@ -39,7 +40,7 @@ const FIELD =
 const BUTTON =
   "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-700 bg-slate-800 px-4 text-sm font-medium text-white transition-all duration-300 hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-amber-400 disabled:opacity-50";
 
-export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: BrokerBuyer[] }) {
+export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
@@ -47,10 +48,34 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
   const [unitPrice, setUnitPrice] = useState("");
   const [batchPrice, setBatchPrice] = useState("");
   const [buyerId, setBuyerId] = useState("");
+  const [artisans, setArtisans] = useState<EligibleArtisan[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   const count = selected.size;
+  const selectedKey = [...selected].sort().join(",");
+  // Sans sélection, aucun artisan n'est proposé.
+  const visibleArtisans = count > 0 ? artisans : [];
+
+  // Dès qu'un lead est sélectionné, les artisans compatibles avec TOUS les leads sont recherchés (niche et zone).
+  useEffect(() => {
+    if (!selectedKey) return;
+    let cancelled = false;
+    fetch(`/api/broker/match?leadIds=${encodeURIComponent(selectedKey)}`, { cache: "no-store" })
+      .then((response) => (response.ok ? (response.json() as Promise<{ artisans: EligibleArtisan[] }>) : { artisans: [] }))
+      .then((body) => {
+        if (cancelled) return;
+        setArtisans(body.artisans);
+        // L'acheteur choisi doit rester compatible après un changement de sélection.
+        setBuyerId((current) => (body.artisans.some((artisan) => artisan.id === current) ? current : ""));
+      })
+      .catch(() => {
+        if (!cancelled) setArtisans([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKey]);
   const unit = Number(unitPrice.replace(",", "."));
   const batch = Number(batchPrice.replace(",", "."));
   const total = mode === "unit" ? unit * count : batch;
@@ -189,7 +214,9 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
 
       {count > 0 && (
         <div role="region" aria-label="Actions de vente" className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-slate-900/90 px-4 py-3 shadow-[0_0_24px_-8px_rgba(251,191,36,0.5)] backdrop-blur">
-          <span className="text-sm text-white">{count} lead{count > 1 ? "s" : ""} sélectionné{count > 1 ? "s" : ""}</span>
+          <span className="text-sm text-white">
+            {count} lead{count > 1 ? "s" : ""} sélectionné{count > 1 ? "s" : ""} · {visibleArtisans.length} artisan{visibleArtisans.length > 1 ? "s" : ""} compatible{visibleArtisans.length > 1 ? "s" : ""}
+          </span>
           <button type="button" onClick={openModal} className={`${BUTTON} border-amber-400/60 bg-amber-400/15 text-amber-200`}>
             Vendre {count} lead{count > 1 ? "s" : ""} sélectionné{count > 1 ? "s" : ""}
           </button>
@@ -244,18 +271,45 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
                 </label>
               )}
 
-              <label className="flex flex-col gap-1 text-sm text-slate-300">
-                Artisan acheteur
-                <select value={buyerId} onChange={(event) => setBuyerId(event.target.value)} className={FIELD}>
-                  <option value="">Choisir dans la base de prospects</option>
-                  {buyers.map((buyer) => (
-                    <option key={buyer.id} value={buyer.id}>
-                      {buyer.company}
-                      {buyer.city ? ` (${buyer.city})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-sm text-slate-300">Artisan acheteur compatible</legend>
+                {visibleArtisans.length === 0 ? (
+                  <p className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">
+                    Aucun artisan compatible avec cette sélection. Renseignez la niche et la zone de l&apos;artisan.
+                  </p>
+                ) : (
+                  visibleArtisans.map((artisan) => (
+                    <label
+                      key={artisan.id}
+                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-all duration-300 hover:bg-slate-800/50 ${
+                        buyerId === artisan.id ? "border-amber-400/60 bg-amber-400/10" : "border-white/10"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <input
+                          type="radio"
+                          name="buyer"
+                          value={artisan.id}
+                          checked={buyerId === artisan.id}
+                          onChange={() => setBuyerId(artisan.id)}
+                          className="accent-amber-400"
+                        />
+                        <span className="truncate text-white">
+                          {artisan.company}
+                          {artisan.city ? ` (${artisan.city})` : ""}
+                        </span>
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${
+                          artisan.score === 100 ? "border border-emerald-600 bg-emerald-900/50 text-emerald-300" : "border border-orange-800 bg-orange-900/50 text-orange-400"
+                        }`}
+                      >
+                        {artisan.label}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </fieldset>
 
               <p className="text-sm text-slate-300">
                 Total : <span className="font-semibold tabular-nums text-white">{Number.isFinite(total) && total > 0 ? euros(total) : "—"}</span>

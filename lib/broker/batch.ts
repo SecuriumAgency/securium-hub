@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { evaluateMatch } from "@/lib/broker/matching";
 import { calculateBatchDiscount, calculateSuggestedPrice, type LeadQuality } from "@/lib/broker/pricingEngine";
 import { prisma } from "@/lib/prisma";
 
@@ -39,14 +40,23 @@ export async function createLeadBatch(input: CreateBatchInput, now = new Date())
   const ids = [...new Set(input.leadIds)];
 
   const result = await prisma.$transaction(async (tx) => {
-    const buyer = await tx.outreachProspect.findUnique({ where: { id: input.buyerId }, select: { id: true, company: true } });
+    const buyer = await tx.outreachProspect.findUnique({
+      where: { id: input.buyerId },
+      select: { id: true, company: true, targetNiches: true, targetZipCodes: true },
+    });
     if (!buyer) throw new BrokerError("Acheteur introuvable.", 404);
 
     const eligible = { id: { in: ids }, status: "AVAILABLE" as const, consentToShare: true };
     const leads = await tx.capturedLead.findMany({
       where: eligible,
-      select: { id: true, quality: true, niche: true, suggestedPrice: true },
+      select: { id: true, quality: true, niche: true, region: true, postalCode: true, suggestedPrice: true },
     });
+
+    // Anti-erreur : l'artisan doit être compatible (niche et zone) avec chacun des leads du lot.
+    const incompatible = leads.filter((lead) => !evaluateMatch(lead, buyer).eligible);
+    if (incompatible.length > 0) {
+      throw new BrokerError(`Artisan non compatible avec ${incompatible.length} lead(s) du lot : niche ou zone non couverte.`, 400);
+    }
     if (leads.length !== ids.length) throw new BrokerError("Certains leads ne sont plus disponibles ou ne peuvent pas être cédés.", 409);
 
     const count = ids.length;
