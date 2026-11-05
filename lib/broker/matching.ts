@@ -15,6 +15,9 @@ const slug = (value: string) => {
   return NICHE_ALIASES[canonical] ?? canonical;
 };
 
+/** Forme canonique d'une niche (lead ou artisan), telle qu'elle est stockée côté artisan. */
+export const canonicalNiche = slug;
+
 /** Matching d'un lead et d'un artisan. Un lead n'est compatible qu'avec une niche couverte ET une zone couverte. */
 export function evaluateMatch(lead: MatchableLead, artisan: MatchableArtisan): MatchResult {
   const niche = slug(lead.niche);
