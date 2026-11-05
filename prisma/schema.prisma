@@ -61,6 +61,9 @@ model OutreachProspect {
   // Colonne du Kanban : déplacée à la main, posée à la rédaction d'un icebreaker, puis « Email 1 Envoyé » à l'envoi.
   // Le registre et l'agent Chasseur gardent `status`, en texte libre.
   pipelineStatus PipelineStatus    @default(NOUVEAU)
+  // Suivi commercial du Warm Calling : appelé sans réponse, audit programmé, non intéressé. Distinct de `status`.
+  callStatus     String?
+  callUpdatedAt  DateTime?
   // Premier email ouvert, premier lien cliqué.
   emailOpenedAt  DateTime?
   linkClickedAt  DateTime?

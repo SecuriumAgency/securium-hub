@@ -3,13 +3,15 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { AgentSettingsForm } from "@/components/admin/AgentSettingsForm";
 import { DraftsPanel } from "@/components/admin/DraftsPanel";
 import { KanbanBoard } from "@/components/admin/KanbanBoard";
+import { WarmCallTable, type WarmCallRow } from "@/components/core/WarmCallTable";
 import { OutreachTabs, type OutreachView } from "@/components/admin/OutreachTabs";
 import { ProspectHistory } from "@/components/admin/ProspectHistory";
 import { ProspectorRunsPanel } from "@/components/admin/ProspectorRunsPanel";
 import { SegmentDraftsPanel } from "@/components/admin/SegmentDraftsPanel";
-import { DRAFT_STATUS } from "@/lib/chasseur";
+import { contactedProspectsWhere, DRAFT_STATUS } from "@/lib/chasseur";
 import { MAX_KANBAN_LEADS } from "@/lib/kanban";
 import { prisma } from "@/lib/prisma";
+import { CALL_STATUSES, type CallStatus } from "@/lib/warm-call";
 import { getKanbanLeads } from "./actions";
 
 export const metadata: Metadata = {
@@ -54,12 +56,27 @@ function PhoneLink({ phone }: { phone: string | null }) {
 export default async function OutreachPage({ searchParams }: { searchParams: Promise<{ vue?: string }> }) {
   const { vue } = await searchParams;
   const initialView: OutreachView = vue === "suivi" ? "suivi" : "kanban";
-  const [prospects, total, byStatus, leads] = await Promise.all([
+  const [prospects, total, byStatus, leads, contacted] = await Promise.all([
     prisma.outreachProspect.findMany({ orderBy: { lastContactAt: "desc" }, take: MAX_ROWS }),
     prisma.outreachProspect.count(),
     prisma.outreachProspect.groupBy({ by: ["status"], _count: { _all: true } }),
     getKanbanLeads(),
+    // Pipeline de closing : prospects déjà contactés par email, du plus récent au plus ancien.
+    prisma.outreachProspect.findMany({
+      where: contactedProspectsWhere(),
+      select: { id: true, company: true, phone: true, activity: true, lastContactAt: true, callStatus: true },
+      orderBy: { lastContactAt: "desc" },
+      take: 500,
+    }),
   ]);
+  const warmRows: WarmCallRow[] = contacted.map((prospect) => ({
+    id: prospect.id,
+    company: prospect.company,
+    phone: prospect.phone,
+    activity: prospect.activity,
+    sentAt: prospect.lastContactAt.toISOString(),
+    callStatus: prospect.callStatus !== null && prospect.callStatus in CALL_STATUSES ? (prospect.callStatus as CallStatus) : null,
+  }));
   const statuses = byStatus.sort((a, b) => b._count._all - a._count._all);
 
   return (
@@ -103,6 +120,18 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
               <ProspectorRunsPanel />
 
               <DraftsPanel />
+
+              <section aria-labelledby="warm-calling" className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <h2 id="warm-calling" className="text-lg font-semibold text-foreground">
+                    Pipeline de Closing (Warm Calling)
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {warmRows.length} prospect{warmRows.length > 1 ? "s" : ""} contacté{warmRows.length > 1 ? "s" : ""} par email, à rappeler au téléphone.
+                  </p>
+                </div>
+                <WarmCallTable rows={warmRows} />
+              </section>
 
               <SegmentDraftsPanel />
 
