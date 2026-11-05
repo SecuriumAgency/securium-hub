@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { PUBLIC_SITE_ID, PublicLeadSchema } from "@/lib/public-leads-rules";
+import { calculateSuggestedPrice, classifyLeadQuality } from "@/lib/broker/pricingEngine";
 import { takeRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
   try {
     const message = lead.message ? lead.message : null;
     const email = lead.email ? lead.email : null;
+    const quality = classifyLeadQuality({ urgency: lead.urgency, message, postalCode: lead.postalCode });
     // Deux écritures dans une transaction : le lead du Hub, et la fiche vendable du Lead Broker.
     await prisma.$transaction([
       prisma.lead.create({
@@ -82,6 +84,9 @@ export async function POST(request: NextRequest) {
           urgency: lead.urgency,
           message,
           consentToShare: lead.shareConsent === true,
+          // Qualité et prix suggéré calculés ici, sans IA : même formulaire, même résultat.
+          quality,
+          suggestedPrice: calculateSuggestedPrice(quality, lead.niche),
         },
       }),
     ]);

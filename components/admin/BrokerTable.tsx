@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { calculateBatchDiscount, calculateSuggestedPrice, type LeadQuality } from "@/lib/broker/pricingEngine";
 
 // Lead Broker : leads disponibles, sélection multiple, vente à l'unité ou par lot.
-// Déterministe : aucun appel à un modèle, le prix est saisi par l'utilisateur.
+// Déterministe : aucun appel à un modèle. Le prix suggéré vient du moteur de pricing, il reste modifiable.
 
 export type BrokerLead = {
   id: string;
@@ -13,13 +14,22 @@ export type BrokerLead = {
   niche: string;
   region: string | null;
   urgency: string | null;
+  quality: LeadQuality;
+  suggestedPrice: number | null;
   createdAt: string;
 };
 
 export type BrokerBuyer = { id: string; company: string; city: string | null };
 
 const URGENCY_LABEL: Record<string, string> = { immediat: "Immédiat", "3_mois": "Dans 3 mois", "6_mois": "Dans 6 mois" };
-const DEFAULT_UNIT_PRICE = 35;
+const QUALITY_BADGE: Record<LeadQuality, { label: string; className: string }> = {
+  FAIBLE: { label: "Faible", className: "bg-slate-700 text-slate-300 border border-slate-600" },
+  MOYEN: { label: "Moyen", className: "bg-orange-900/50 text-orange-400 border border-orange-800" },
+  FORT: { label: "Fort", className: "bg-emerald-900/50 text-emerald-300 border border-emerald-600" },
+};
+
+// Prix suggéré d'un lead : celui enregistré à la capture, sinon recalculé avec la même grille.
+const leadSuggested = (lead: BrokerLead) => lead.suggestedPrice ?? calculateSuggestedPrice(lead.quality, lead.niche);
 
 const dateFormat = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short" });
 const euros = (value: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
@@ -34,7 +44,7 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"unit" | "batch">("unit");
-  const [unitPrice, setUnitPrice] = useState(String(DEFAULT_UNIT_PRICE));
+  const [unitPrice, setUnitPrice] = useState("");
   const [batchPrice, setBatchPrice] = useState("");
   const [buyerId, setBuyerId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,6 +55,11 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
   const batch = Number(batchPrice.replace(",", "."));
   const total = mode === "unit" ? unit * count : batch;
 
+  // Prix suggéré de la sélection, remise de lot comprise (10 % dès 10 leads).
+  const selectedLeads = leads.filter((lead) => selected.has(lead.id));
+  const suggestedSum = selectedLeads.reduce((sum, lead) => sum + leadSuggested(lead), 0);
+  const suggestion = calculateBatchDiscount(count, suggestedSum);
+
   function toggle(id: string) {
     setSelected((current) => {
       const next = new Set(current);
@@ -54,8 +69,10 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
     });
   }
 
+  // Ouverture : les prix proposés sont ceux du moteur ; l'utilisateur peut les remplacer.
   function openModal() {
-    setBatchPrice(String(Math.round(DEFAULT_UNIT_PRICE * count * 100) / 100));
+    setBatchPrice(String(suggestion.total));
+    setUnitPrice(count > 0 ? String(Math.round((suggestion.total / count) * 100) / 100) : "");
     setMessage(null);
     setOpen(true);
   }
@@ -133,7 +150,7 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
                     className="size-5 accent-amber-400"
                   />
                 </th>
-                {["Nom", "Téléphone", "Niche", "Département", "Urgence", "Reçu le"].map((title) => (
+                {["Nom", "Téléphone", "Niche", "Département", "Urgence", "Qualité", "Reçu le"].map((title) => (
                   <th key={title} scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                     {title}
                   </th>
@@ -157,6 +174,11 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
                   <td className="px-4 py-3 text-sm text-slate-200">{lead.niche.replace(/-/g, " ")}</td>
                   <td className="px-4 py-3 text-sm text-slate-200">{lead.region ?? "—"}</td>
                   <td className="px-4 py-3 text-sm text-slate-200">{lead.urgency ? URGENCY_LABEL[lead.urgency] ?? lead.urgency : "—"}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${QUALITY_BADGE[lead.quality].className}`}>
+                      {QUALITY_BADGE[lead.quality].label}
+                    </span>
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm tabular-nums text-slate-400">{dateFormat.format(new Date(lead.createdAt))}</td>
                 </tr>
               ))}
@@ -188,6 +210,16 @@ export function BrokerTable({ leads, buyers }: { leads: BrokerLead[]; buyers: Br
             </h2>
 
             <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                <p>
+                  Prix total suggéré : <span className="font-semibold tabular-nums text-white">{euros(suggestion.total)}</span>
+                </p>
+                {suggestion.discount > 0 && (
+                  <p className="text-xs text-emerald-300">Remise de lot de {Math.round(suggestion.rate * 100)} % incluse ({euros(suggestion.discount)}).</p>
+                )}
+                <p className="text-xs text-slate-500">Vous pouvez remplacer ce prix ci-dessous avant de confirmer.</p>
+              </div>
+
               <fieldset className="flex flex-col gap-2">
                 <legend className="mb-2 text-sm text-slate-300">Mode de vente</legend>
                 <label className="flex items-center gap-2 text-sm text-white">

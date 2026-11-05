@@ -259,6 +259,12 @@ enum CapturedLeadStatus {
   REJECTED
 }
 
+enum LeadQuality {
+  FAIBLE
+  MOYEN
+  FORT
+}
+
 enum LeadBatchStatus {
   PENDING_PAYMENT
   PAID
@@ -279,6 +285,8 @@ model CapturedLead {
   consentToShare Boolean            @default(false)
   status         CapturedLeadStatus @default(AVAILABLE)
   price          Float?
+  quality        LeadQuality @default(MOYEN)
+  suggestedPrice Float?
   buyerId        String?
   buyer          OutreachProspect?  @relation(fields: [buyerId], references: [id], onDelete: SetNull)
   batchId        String?

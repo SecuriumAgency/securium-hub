@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { calculateBatchDiscount, calculateSuggestedPrice, type LeadQuality } from "@/lib/broker/pricingEngine";
 import { prisma } from "@/lib/prisma";
 
 // Vente de leads capturés à un artisan, à l'unité ou par lot. Déterministe : aucun appel à un modèle.
 // Une donnée n'est vendue que si la personne a accepté la cession (consentToShare) et qu'elle est AVAILABLE.
+// Sans prix saisi, le prix suggéré du moteur de pricing s'applique ; la réduction de lot (10 % dès 10 leads) aussi.
 
 export const CreateBatchSchema = z.object({
   leadIds: z.array(z.string().min(1).max(64)).min(1).max(200),
@@ -29,24 +31,42 @@ export type BatchResult = { batchId: string; count: number; total: number; billi
 
 /**
  * Crée le lot et marque les leads SOLD dans une seule transaction : si un lead a changé d'état entre-temps,
- * rien n'est écrit. Le mode « unit » applique le prix unitaire à chaque lead ; « batch » un prix global.
+ * rien n'est écrit. Prix retenu :
+ * - à l'unité : le prix saisi pour chaque lead, sinon le prix suggéré remisé du lot ;
+ * - par lot : le prix global saisi, sinon le total suggéré remisé.
  */
 export async function createLeadBatch(input: CreateBatchInput, now = new Date()): Promise<BatchResult> {
   const ids = [...new Set(input.leadIds)];
-  if (input.mode === "unit" && input.unitPrice === undefined) throw new BrokerError("Prix unitaire requis.", 422);
-  if (input.mode === "batch" && input.totalPrice === undefined) throw new BrokerError("Prix du lot requis.", 422);
 
   const result = await prisma.$transaction(async (tx) => {
     const buyer = await tx.outreachProspect.findUnique({ where: { id: input.buyerId }, select: { id: true, company: true } });
     if (!buyer) throw new BrokerError("Acheteur introuvable.", 404);
 
     const eligible = { id: { in: ids }, status: "AVAILABLE" as const, consentToShare: true };
-    const found = await tx.capturedLead.count({ where: eligible });
-    if (found !== ids.length) throw new BrokerError("Certains leads ne sont plus disponibles ou ne peuvent pas être cédés.", 409);
+    const leads = await tx.capturedLead.findMany({
+      where: eligible,
+      select: { id: true, quality: true, niche: true, suggestedPrice: true },
+    });
+    if (leads.length !== ids.length) throw new BrokerError("Certains leads ne sont plus disponibles ou ne peuvent pas être cédés.", 409);
 
     const count = ids.length;
-    const total = cents(input.mode === "unit" ? (input.unitPrice ?? 0) * count : (input.totalPrice ?? 0));
-    const perLead = cents(total / count);
+    const suggestedOf = (lead: { quality: LeadQuality; niche: string; suggestedPrice: number | null }) =>
+      lead.suggestedPrice ?? calculateSuggestedPrice(lead.quality, lead.niche);
+    const suggestedSum = leads.reduce((sum, lead) => sum + suggestedOf(lead), 0);
+    const discountRate = calculateBatchDiscount(count, 100).rate;
+
+    // Prix par lead et total retenus.
+    const perLead = new Map<string, number>();
+    let total: number;
+    if (input.mode === "unit") {
+      for (const lead of leads) {
+        perLead.set(lead.id, input.unitPrice !== undefined ? cents(input.unitPrice) : cents(suggestedOf(lead) * (1 - discountRate)));
+      }
+      total = cents([...perLead.values()].reduce((sum, value) => sum + value, 0));
+    } else {
+      total = input.totalPrice !== undefined ? cents(input.totalPrice) : calculateBatchDiscount(count, suggestedSum).total;
+      for (const lead of leads) perLead.set(lead.id, cents(total / count));
+    }
 
     const batch = await tx.leadBatch.create({
       data: {
@@ -58,11 +78,13 @@ export async function createLeadBatch(input: CreateBatchInput, now = new Date())
       select: { id: true },
     });
 
-    const updated = await tx.capturedLead.updateMany({
-      where: eligible,
-      data: { status: "SOLD", buyerId: buyer.id, batchId: batch.id, price: perLead, soldAt: now },
-    });
-    if (updated.count !== count) throw new BrokerError("Vente interrompue : un lead a changé d'état.", 409);
+    for (const lead of leads) {
+      const updated = await tx.capturedLead.updateMany({
+        where: { id: lead.id, status: "AVAILABLE", consentToShare: true },
+        data: { status: "SOLD", buyerId: buyer.id, batchId: batch.id, price: perLead.get(lead.id) ?? null, soldAt: now },
+      });
+      if (updated.count !== 1) throw new BrokerError("Vente interrompue : un lead a changé d'état.", 409);
+    }
 
     return { batchId: batch.id, count, total };
   });

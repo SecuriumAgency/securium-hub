@@ -16,7 +16,7 @@ export default async function BrokerPage() {
       where: { status: "AVAILABLE", consentToShare: true },
       orderBy: { createdAt: "desc" },
       take: 500,
-      select: { id: true, name: true, phone: true, niche: true, region: true, urgency: true, createdAt: true },
+      select: { id: true, name: true, phone: true, niche: true, region: true, urgency: true, quality: true, suggestedPrice: true, createdAt: true },
     }),
     prisma.outreachProspect.findMany({
       orderBy: { company: "asc" },
@@ -32,6 +32,8 @@ export default async function BrokerPage() {
     niche: lead.niche,
     region: lead.region,
     urgency: lead.urgency,
+    quality: lead.quality,
+    suggestedPrice: lead.suggestedPrice,
     createdAt: lead.createdAt.toISOString(),
   }));
   const choices: BrokerBuyer[] = buyers;
