@@ -5,7 +5,7 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { IAfluencerStudio, type ConnectionState } from "@/components/admin/IAfluencerStudio";
 import { InstagramIcon, TikTokIcon } from "@/components/ui/SocialIcons";
 import { PLATFORM_LABELS, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/agents/iafluencer-rules";
-import { readSettings } from "@/lib/iafluencer-engine";
+import { readBio, readSettings } from "@/lib/iafluencer-engine";
 import { connectedAccounts, type SocialProfile } from "@/lib/social-accounts";
 import { isPlatformConfigured } from "@/lib/social-oauth";
 
@@ -130,6 +130,7 @@ export default async function IAfluencerPage({ searchParams }: { searchParams: P
   const { connections, accounts, databaseError } = await loadConnections();
   // Réglages lus en base ; en cas d'échec, les valeurs par défaut (Auto-Pilote désactivé).
   const settings = await readSettings().catch(() => ({ artDirection: "", brandVoice: "", autopilotStories: false, autopilotReels: false }));
+  const initialBio = await readBio().catch(() => "");
   const platform = SOCIAL_PLATFORMS.find((value) => value === params.platform);
   const feedback = params.oauth ? FEEDBACK[params.oauth] : undefined;
 
@@ -163,7 +164,7 @@ export default async function IAfluencerPage({ searchParams }: { searchParams: P
           </p>
         )}
 
-        <IAfluencerStudio connections={connections} settings={settings} />
+        <IAfluencerStudio connections={connections} settings={settings} initialBio={initialBio} />
       </div>
     </main>
   );

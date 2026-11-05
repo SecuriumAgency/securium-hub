@@ -35,6 +35,12 @@ export async function readSettings(): Promise<IAfluencerSettingsInput> {
   };
 }
 
+/** Bio commune de l'IAfluencer, vide tant qu'elle n'a pas été enregistrée. */
+export async function readBio(): Promise<string> {
+  const row = await prisma.iAfluencerSettings.findUnique({ where: { id: SETTINGS_ID }, select: { bio: true } });
+  return row?.bio ?? "";
+}
+
 export async function saveSettings(input: IAfluencerSettingsInput): Promise<void> {
   await prisma.iAfluencerSettings.upsert({
     where: { id: SETTINGS_ID },

@@ -1,24 +1,18 @@
 "use client";
 
-import { useMemo, useState, type DragEvent, type FormEvent } from "react";
-import { CalendarDays, Film, Plus, Trash2, Upload } from "lucide-react";
-import {
-  BIO_LIMITS,
-  CAPTION_MAX,
-  DEFAULT_POLICIES,
-  PLATFORM_LABELS,
-  SOCIAL_PLATFORMS,
-  bioErrors,
-  nextSlot,
-  type ScheduledPost,
-  type SocialPlatform,
-} from "@/lib/agents/iafluencer-rules";
-import { MAX_RUSH_BYTES, validateUpload } from "@/lib/media/upload-rules";
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
+import { upload } from "@vercel/blob/client";
+import { CalendarDays, Film, Plus, Upload } from "lucide-react";
+import { BIO_LIMITS, CAPTION_MAX, PLATFORM_LABELS, SOCIAL_PLATFORMS, bioErrors, type SocialPlatform } from "@/lib/agents/iafluencer-rules";
+import { validateUpload } from "@/lib/media/upload-rules";
 import { IAfluencerAutopilot, type AutopilotSettings } from "@/components/admin/IAfluencerAutopilot";
 
 // non_configuree : l'application OAuth n'a pas ses identifiants. non_connectee : identifiants présents, aucun compte relié.
-// connectee : compte relié (aucun flux ne le produit encore).
+// connectee : compte relié.
 export type ConnectionState = Record<SocialPlatform, "non_configuree" | "non_connectee" | "connectee">;
+
+export type RushItem = { id: string; fileName: string; url: string; sizeMb: number; createdAt: string };
+type PostItem = { id: string; platform: string; format: string; source: string; rushName: string | null; scheduledAt: string; status: string; error: string | null };
 
 const panelClass = "glass-panel flex min-w-0 flex-col gap-4 rounded-2xl p-5 md:p-6";
 const sectionTitle = "text-sm font-semibold uppercase tracking-[0.2em] text-primary";
@@ -27,38 +21,105 @@ const fieldClass =
 const primaryButton =
   "inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 text-sm text-primary transition-all duration-300 hover:shadow-[0_0_18px_-6px_var(--primary)] focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none";
 
-export function IAfluencerStudio({ connections, settings }: { connections: ConnectionState; settings: AutopilotSettings }) {
+export function IAfluencerStudio({
+  connections,
+  settings,
+  initialBio,
+}: {
+  connections: ConnectionState;
+  settings: AutopilotSettings;
+  initialBio: string;
+}) {
+  const [rushes, setRushes] = useState<RushItem[]>([]);
+
+  const refreshRushes = useCallback(async () => {
+    try {
+      const response = await fetch("/api/rushes", { cache: "no-store" });
+      if (!response.ok) return;
+      const body = (await response.json()) as { rushes: RushItem[] };
+      setRushes(body.rushes);
+    } catch {
+      // Liste indisponible : les rushs déjà affichés restent visibles.
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshRushes();
+  }, [refreshRushes]);
+
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      <RushDropzone />
-      <BrandControl connections={connections} settings={settings} />
-      <ContentGrid />
+      <RushDropzone rushes={rushes} onRegistered={refreshRushes} />
+      <BrandControl connections={connections} settings={settings} initialBio={initialBio} />
+      <ContentGrid rushes={rushes} />
     </div>
   );
 }
 
 // ---------- Section 1 : rushs ----------
 
-type Rush = { id: string; name: string; size: number };
+type UploadState = "uploading" | "registering" | "done" | "error";
+type UploadItem = { id: string; name: string; progress: number; state: UploadState; error: string | null };
 
-function RushDropzone() {
-  const [rushes, setRushes] = useState<Rush[]>([]);
+// Nom sûr pour le stockage : lettres, chiffres, point, tiret et souligné, extension en minuscules.
+function storageName(name: string): { pathname: string; contentType: "video/mp4" | "video/quicktime" } {
+  const dot = name.lastIndexOf(".");
+  const base = (dot > 0 ? name.slice(0, dot) : name).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 100) || "rush";
+  const extension = name.slice(dot + 1).toLowerCase() === "mov" ? "mov" : "mp4";
+  return { pathname: `rushs/${base}.${extension}`, contentType: extension === "mov" ? "video/quicktime" : "video/mp4" };
+}
+
+function RushDropzone({ rushes, onRegistered }: { rushes: RushItem[]; onRegistered: () => Promise<void> }) {
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
 
+  function patch(id: string, change: Partial<UploadItem>) {
+    setUploads((current) => current.map((item) => (item.id === id ? { ...item, ...change } : item)));
+  }
+
+  async function sendFile(file: File, id: string) {
+    const { pathname, contentType } = storageName(file.name);
+    try {
+      const blob = await upload(pathname, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+        contentType,
+        onUploadProgress: ({ percentage }) => patch(id, { progress: Math.round(percentage) }),
+      });
+      patch(id, { state: "registering", progress: 100 });
+      const response = await fetch("/api/rushes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: blob.url,
+          fileName: file.name,
+          sizeMb: Math.max(1, Math.round(file.size / 1024 / 1024)),
+          contentType,
+        }),
+      });
+      if (!response.ok) throw new Error("Enregistrement du rush refusé.");
+      patch(id, { state: "done" });
+      await onRegistered();
+    } catch (error) {
+      patch(id, { state: "error", error: error instanceof Error ? error.message : "Envoi impossible." });
+    }
+  }
+
   function addFiles(files: File[]) {
     const nextErrors: string[] = [];
-    const accepted: Rush[] = [];
+    const started: { file: File; id: string }[] = [];
     for (const file of files) {
       const check = validateUpload({ name: file.name, size: file.size });
-      if (check.ok) accepted.push({ id: `${file.name}-${file.size}-${file.lastModified}`, name: file.name, size: file.size });
-      else nextErrors.push(`${file.name} : ${check.error}`);
+      if (!check.ok) {
+        nextErrors.push(`${file.name} : ${check.error}`);
+        continue;
+      }
+      started.push({ file, id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
     }
     setErrors(nextErrors);
-    setRushes((current) => {
-      const known = new Set(current.map((rush) => rush.id));
-      return [...current, ...accepted.filter((rush) => !known.has(rush.id))];
-    });
+    setUploads((current) => [...current, ...started.map(({ file, id }) => ({ id, name: file.name, progress: 0, state: "uploading" as const, error: null }))]);
+    for (const { file, id } of started) void sendFile(file, id);
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
@@ -66,6 +127,8 @@ function RushDropzone() {
     setDragging(false);
     addFiles(Array.from(event.dataTransfer.files));
   }
+
+  const active = uploads.filter((item) => item.state !== "done");
 
   return (
     <section aria-labelledby="rushs-title" className={panelClass}>
@@ -107,7 +170,33 @@ function RushDropzone() {
         </ul>
       )}
 
-      {rushes.length === 0 ? (
+      {active.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {active.map((item) => (
+            <li key={item.id} className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="truncate text-foreground">{item.name}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {item.state === "error" ? "Échec" : item.state === "registering" ? "Enregistrement…" : `${item.progress} %`}
+                </span>
+              </div>
+              <div
+                role="progressbar"
+                aria-label={`Envoi de ${item.name}`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={item.progress}
+                className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+              >
+                <div className={`h-full transition-all duration-300 ${item.state === "error" ? "bg-destructive" : "bg-primary"}`} style={{ width: `${item.progress}%` }} />
+              </div>
+              {item.error && <p className="text-xs text-destructive">{item.error}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {rushes.length === 0 && active.length === 0 ? (
         <p className="text-sm text-muted-foreground">Aucun rush déposé pour le moment.</p>
       ) : (
         <ul className="flex flex-col divide-y divide-border">
@@ -115,19 +204,11 @@ function RushDropzone() {
             <li key={rush.id} className="flex min-w-0 items-center gap-3 py-2.5">
               <Film aria-hidden className="size-4 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-foreground">{rush.name}</p>
+                <p className="truncate text-sm text-foreground">{rush.fileName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {(rush.size / 1024 / 1024).toFixed(1)} Mo · en attente du poste de traitement ({Math.round(MAX_RUSH_BYTES / 1024 ** 3)} Go max)
+                  {rush.sizeMb} Mo · déposé le {formatDay(new Date(rush.createdAt))}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setRushes((current) => current.filter((item) => item.id !== rush.id))}
-                aria-label={`Retirer ${rush.name}`}
-                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-destructive focus-visible:outline-2 focus-visible:outline-primary"
-              >
-                <Trash2 aria-hidden className="size-4" />
-              </button>
             </li>
           ))}
         </ul>
@@ -138,12 +219,32 @@ function RushDropzone() {
 
 // ---------- Section 2 : biographie synchronisée ----------
 
-function BrandControl({ connections, settings }: { connections: ConnectionState; settings: AutopilotSettings }) {
-  const [bio, setBio] = useState("");
+function BrandControl({ connections, settings, initialBio }: { connections: ConnectionState; settings: AutopilotSettings; initialBio: string }) {
+  const [bio, setBio] = useState(initialBio);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const problems = SOCIAL_PLATFORMS.flatMap((platform) => bioErrors(platform, bio));
-  // Synchronisation dès qu'au moins un réseau est relié ; elle ne vise que les réseaux connectés.
   const anyConnected = SOCIAL_PLATFORMS.some((platform) => connections[platform] === "connectee");
   const connectedNames = SOCIAL_PLATFORMS.filter((platform) => connections[platform] === "connectee").map((platform) => PLATFORM_LABELS[platform]);
+  const canSync = bio.trim().length > 0 && problems.length === 0 && anyConnected && !busy;
+
+  async function sync() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/social/update-bio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bio }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
+      setMessage(response.ok ? { kind: "ok", text: body.message ?? "Bio enregistrée." } : { kind: "error", text: body.error ?? "Enregistrement impossible." });
+    } catch {
+      setMessage({ kind: "error", text: "Connexion impossible. Réessayez." });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section aria-labelledby="brand-title" className={panelClass}>
@@ -189,14 +290,19 @@ function BrandControl({ connections, settings }: { connections: ConnectionState;
       <IAfluencerAutopilot initial={settings} />
 
       <div className="mt-auto flex flex-col gap-2">
-        <button type="button" disabled={problems.length > 0 || !anyConnected} className={primaryButton}>
-          Synchroniser sur Instagram et TikTok
+        <button type="button" onClick={sync} disabled={!canSync} className={primaryButton}>
+          {busy ? "Enregistrement…" : "Synchroniser sur Instagram et TikTok"}
         </button>
         <p className="text-xs text-muted-foreground">
           {anyConnected
-            ? `Synchronisation prête pour : ${connectedNames.join(", ")}.`
+            ? `Connectés : ${connectedNames.join(", ")}. La bio est enregistrée ; son envoi vers les profils n'est pas encore branché.`
             : "Synchronisation désactivée : aucun compte n'est encore connecté (voir l'état des connexions ci-dessus)."}
         </p>
+        {message && (
+          <p role={message.kind === "error" ? "alert" : "status"} className={`text-xs ${message.kind === "error" ? "text-destructive" : "text-foreground"}`}>
+            {message.text}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -204,14 +310,38 @@ function BrandControl({ connections, settings }: { connections: ConnectionState;
 
 // ---------- Section 3 : calendrier ----------
 
-function ContentGrid() {
-  const [entries, setEntries] = useState<ScheduledPost[]>([]);
+const STATUS_LABEL: Record<string, string> = { PENDING: "En attente", PUBLISHED: "Publié", FAILED: "Échec" };
+
+function ContentGrid({ rushes }: { rushes: RushItem[] }) {
+  const [posts, setPosts] = useState<PostItem[]>([]);
   const [platform, setPlatform] = useState<SocialPlatform>("instagram");
   const [kind, setKind] = useState<"post" | "story">("post");
-  const [when, setWhen] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60 * 1000)));
+  const [date, setDate] = useState(() => toDateInput(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+  const [time, setTime] = useState("10:00");
+  const [rushId, setRushId] = useState("");
   const [caption, setCaption] = useState("");
-  const [media, setMedia] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  const loadPosts = useCallback(async () => {
+    try {
+      const response = await fetch("/api/posts", { cache: "no-store" });
+      if (!response.ok) return;
+      const body = (await response.json()) as { posts: PostItem[] };
+      setPosts(body.posts);
+    } catch {
+      // Calendrier indisponible : la grille reste vide sans bloquer le formulaire.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPosts();
+  }, [loadPosts]);
+
+  // Rush par défaut : le plus récent, dès qu'il existe.
+  const selectedRush = rushId || rushes[0]?.id || "";
+  // Les Stories n'existent pas sur TikTok : le type revient à « Publication ».
+  const effectiveKind = platform === "tiktok" ? "post" : kind;
 
   const days = useMemo(() => {
     const start = new Date();
@@ -219,30 +349,38 @@ function ContentGrid() {
     return Array.from({ length: 14 }, (_, index) => new Date(start.getTime() + index * 86_400_000));
   }, []);
 
-  function schedule(event: FormEvent<HTMLFormElement>) {
+  async function schedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const text = caption.trim();
-    if (!text) return setMessage("La légende est vide.");
-    if (text.length > CAPTION_MAX) return setMessage(`La légende dépasse ${CAPTION_MAX} caractères.`);
-    if (!media.trim()) return setMessage("Indiquez le rush associé.");
-    const requested = new Date(when);
-    if (Number.isNaN(requested.getTime())) return setMessage("Date invalide.");
-
-    // Même règle que le moteur : espacement minimal et plafond sur 24 h, gigue comprise.
-    const sameNetwork = entries.filter((entry) => entry.platform === platform && entry.status !== "annulee");
-    const latest = sameNetwork.reduce<Date | null>((max, entry) => (max === null || entry.at > max ? entry.at : max), null);
-    // Fenêtre des 24 h qui précèdent la demande, comme dans le moteur.
-    const recentAt = sameNetwork
-      .filter((entry) => entry.at.getTime() >= requested.getTime() - 86_400_000)
-      .map((entry) => entry.at);
-    const at = nextSlot({ requestedAt: requested, lastAt: latest, recentAt, policy: DEFAULT_POLICIES[platform], random: Math.random });
-
-    setEntries((current) => [
-      ...current,
-      { id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()), platform, kind, caption: text, mediaName: media, at, status: "planifiee" },
-    ]);
-    setCaption("");
-    setMessage(`Planifié le ${formatDay(at)} à ${formatTime(at)}, décalé de ${Math.round((at.getTime() - requested.getTime()) / 60_000)} min pour respecter le rythme.`);
+    setMessage(null);
+    if (!selectedRush) return setMessage({ kind: "error", text: "Déposez d'abord un rush." });
+    if (caption.trim().length > CAPTION_MAX) return setMessage({ kind: "error", text: `La légende dépasse ${CAPTION_MAX} caractères.` });
+    setBusy(true);
+    try {
+      const response = await fetch("/api/posts/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform,
+          format: effectiveKind === "story" ? "STORIES" : "FEED",
+          rushId: selectedRush,
+          date,
+          time,
+          caption: caption.trim() || undefined,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setMessage({ kind: "error", text: body.error ?? "Planification impossible." });
+        return;
+      }
+      setCaption("");
+      setMessage({ kind: "ok", text: `Planifié le ${formatDateFr(date)} à ${time} (heure de Paris).` });
+      await loadPosts();
+    } catch {
+      setMessage({ kind: "error", text: "Connexion impossible. Réessayez." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -258,47 +396,67 @@ function ContentGrid() {
             <option key={item} value={item}>{PLATFORM_LABELS[item]}</option>
           ))}
         </select>
-        <label className="sr-only" htmlFor="post-kind">Type</label>
-        <select id="post-kind" value={kind} onChange={(event) => setKind(event.target.value as "post" | "story")} className={`${fieldClass} md:col-span-1`}>
+        <label className="sr-only" htmlFor="post-kind">Type de publication</label>
+        <select id="post-kind" value={effectiveKind} onChange={(event) => setKind(event.target.value as "post" | "story")} className={`${fieldClass} md:col-span-1`}>
           <option value="post">Publication</option>
-          <option value="story">Story</option>
+          {platform === "instagram" && <option value="story">Story</option>}
         </select>
-        <label className="sr-only" htmlFor="post-when">Date et heure souhaitées</label>
-        <input id="post-when" type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} className={`${fieldClass} md:col-span-2`} />
-        <label className="sr-only" htmlFor="post-media">Rush</label>
-        <input id="post-media" value={media} onChange={(event) => setMedia(event.target.value)} placeholder="Nom du rush" className={`${fieldClass} md:col-span-2`} />
+        <label className="sr-only" htmlFor="post-date">Date</label>
+        <input id="post-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} className={`${fieldClass} md:col-span-1`} />
+        <label className="sr-only" htmlFor="post-time">Heure</label>
+        <input id="post-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} className={`${fieldClass} md:col-span-1`} />
+        <label className="sr-only" htmlFor="post-rush">Rush</label>
+        <select id="post-rush" value={selectedRush} onChange={(event) => setRushId(event.target.value)} disabled={rushes.length === 0} className={`${fieldClass} md:col-span-2`}>
+          {rushes.length === 0 && <option value="">Aucun rush déposé</option>}
+          {rushes.map((rush) => (
+            <option key={rush.id} value={rush.id}>{rush.fileName}</option>
+          ))}
+        </select>
         <label className="sr-only" htmlFor="post-caption">Légende</label>
-        <textarea id="post-caption" value={caption} onChange={(event) => setCaption(event.target.value)} rows={2} placeholder="Légende" className="min-w-0 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary md:col-span-5" />
-        <button type="submit" className={`${primaryButton} md:col-span-1`}>
+        <textarea
+          id="post-caption"
+          value={caption}
+          onChange={(event) => setCaption(event.target.value)}
+          rows={2}
+          placeholder="Légende (facultative : générée automatiquement si vide)"
+          className="min-w-0 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary md:col-span-5"
+        />
+        <button type="submit" disabled={busy || !selectedRush} className={`${primaryButton} md:col-span-1`}>
           <Plus aria-hidden className="size-4" />
-          Planifier
+          {busy ? "…" : "Planifier"}
         </button>
       </form>
 
-      {message && <p role="status" className="text-xs text-muted-foreground">{message}</p>}
+      {message && (
+        <p role={message.kind === "error" ? "alert" : "status"} className={`text-xs ${message.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+          {message.text}
+        </p>
+      )}
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <CalendarDays aria-hidden className="size-4" />
-        File locale : les publications ne sont enregistrées que dans cette page, jusqu&apos;au branchement de la file serveur.
+        Publications enregistrées sur le serveur. Le moteur les publie à l&apos;heure prévue.
       </div>
 
       <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         {days.map((day) => {
-          const items = entries.filter((entry) => sameDay(entry.at, day)).sort((a, b) => a.at.getTime() - b.at.getTime());
+          const items = posts.filter((post) => sameDay(new Date(post.scheduledAt), day)).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
           return (
             <li key={day.toISOString()} className="flex min-h-24 min-w-0 flex-col gap-1 rounded-xl border border-border bg-muted/30 p-2">
               <span className="text-xs font-medium text-muted-foreground">{formatDay(day)}</span>
-              {items.map((entry) => (
-                <div key={entry.id} className="flex min-w-0 items-center justify-between gap-1 rounded-md border border-primary/20 bg-primary/10 px-1.5 py-1 text-[0.7rem] text-primary">
-                  <span className="truncate">{formatTime(entry.at)} {PLATFORM_LABELS[entry.platform]}</span>
-                  <button
-                    type="button"
-                    onClick={() => setEntries((current) => current.map((item) => (item.id === entry.id ? { ...item, status: "annulee" } : item)))}
-                    aria-label={`Annuler la publication de ${formatTime(entry.at)}`}
-                    className="shrink-0 cursor-pointer rounded px-1 text-muted-foreground hover:text-destructive"
-                  >
-                    ×
-                  </button>
+              {items.map((post) => (
+                <div
+                  key={post.id}
+                  title={post.error ?? undefined}
+                  className={`flex min-w-0 flex-col rounded-md border px-1.5 py-1 text-[0.7rem] ${
+                    post.status === "FAILED" ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-primary/20 bg-primary/10 text-primary"
+                  }`}
+                >
+                  <span className="truncate">
+                    {formatTime(new Date(post.scheduledAt))} {PLATFORM_LABELS[post.platform as SocialPlatform] ?? post.platform}
+                    {post.format === "STORIES" ? " · Story" : ""}
+                  </span>
+                  <span className="truncate opacity-80">{STATUS_LABEL[post.status] ?? post.status}</span>
                 </div>
               ))}
             </li>
@@ -309,9 +467,14 @@ function ContentGrid() {
   );
 }
 
-function toLocalInput(date: Date) {
+function toDateInput(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function formatDateFr(input: string) {
+  const [year, month, day] = input.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function sameDay(a: Date, b: Date) {
@@ -319,7 +482,7 @@ function sameDay(a: Date, b: Date) {
 }
 
 const dayFormatter = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
-const timeFormatter = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const timeFormatter = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
 function formatDay(date: Date) {
   return dayFormatter.format(date);
 }

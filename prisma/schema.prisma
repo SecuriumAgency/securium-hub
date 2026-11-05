@@ -233,7 +233,18 @@ model IAfluencerSettings {
   id               String   @id
   artDirection     String   @default("")
   brandVoice       String   @default("")
+  bio              String   @default("")
   autopilotStories Boolean  @default(false)
   autopilotReels   Boolean  @default(false)
   updatedAt        DateTime @updatedAt
+}
+
+// Rush vidéo vertical (.mp4 ou .mov) déposé dans l'IAfluencer. Le fichier vit sur Vercel Blob ; seule l'adresse est gardée ici.
+model Rush {
+  id          String   @id @default(cuid())
+  fileName    String
+  url         String   @unique
+  sizeMb      Int
+  contentType String
+  createdAt   DateTime @default(now())
 }
