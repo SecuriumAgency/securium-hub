@@ -191,9 +191,17 @@ export function isRoofingTrade(prospect: { activity: string | null; targetNiches
 // Un prospect dont le métier est renseigné et ne correspond à aucun d'eux est hors cible (artisans, commerces…).
 // Un prospect sans métier n'est pas écarté ici : son métier n'est pas connu, la règle ne le juge pas.
 const PRESCRIBER_ACTIVITY = /syndic|immobili|architect|promot|locati/;
+const foldActivity = (value: string | null | undefined) =>
+  (value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+
+/** Métier de prescripteur : syndic, immobilier, architecte, promoteur, locatif. Sans casse ni accents. */
+export function isPrescriberActivity(activity: string | null | undefined) {
+  return PRESCRIBER_ACTIVITY.test(foldActivity(activity));
+}
+
 export function isOutOfPrescriberScope(prospect: { activity: string | null }) {
-  const activity = (prospect.activity ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
-  return activity !== "" && !PRESCRIBER_ACTIVITY.test(activity);
+  const activity = foldActivity(prospect.activity);
+  return activity !== "" && !isPrescriberActivity(activity);
 }
 
 // Raison pour laquelle un prospect ne peut pas être ciblé, ou null s'il peut l'être.
