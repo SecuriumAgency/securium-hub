@@ -122,7 +122,7 @@ Structure de l'email, dans cet ordre :
 Règles :
 Rattache l'aide proposée à ce que l'on sait de l'entreprise cible ; si elle ne ressemble pas au client idéal, reste général et prudent.
 Appuie-toi uniquement sur les données fournies et sur le brief : n'ajoute ni fait sur l'entreprise, ni chiffre (pas de pourcentage de marge, de gain ou de délai), ni échange passé, ni nom de personne. Si les données sont maigres, reste simple plutôt que de deviner.
-Le prospect a déjà reçu un ou plusieurs emails restés sans réponse : ne fais pas comme si c'était un premier contact, et ne lui reproche pas son silence.
+L'historique dit si le prospect a déjà reçu des emails. S'il en a reçu, restés sans réponse : ne fais pas comme si c'était un premier contact, et ne lui reproche pas son silence. S'il n'en a reçu aucun : c'est un premier contact, sans aucune allusion à un échange passé.
 Corps de 60 à 150 mots, une seule proposition concrète, sans liste à puces, sans lien, sans formule de désinscription (elle est ajoutée ensuite).
 Réponds avec un objet JSON { "subject": ..., "body": ... } : objet de moins de 80 caractères, corps en texte brut signé « L'équipe Securium Agency ».`;
 }
@@ -158,16 +158,21 @@ type ProspectFacts = { company: string; email: string; status: string; createdAt
 // Jamais l'adresse complète ni le téléphone, inutiles pour rédiger.
 export function prospectContext(prospect: ProspectFacts) {
   const domain = prospect.email.split("@")[1] ?? "";
-  const contacts = prospect.status === "Relance_1" ? "deux emails (un premier contact, puis une relance)" : "un email";
+  // Jamais contacté : aucun email n'est parti, et la date de la ligne n'est pas celle d'un contact.
+  const history =
+    prospect.status === NEW_STATUS
+      ? "Historique : aucun email envoyé, c'est un premier contact."
+      : `Historique : ${prospect.status === "Relance_1" ? "deux emails (un premier contact, puis une relance)" : "un email"}, du ${dateFormat.format(prospect.createdAt)} au ${dateFormat.format(prospect.lastContactAt)}, sans réponse.`;
   return [
     `Entreprise : ${prospect.company}`,
     PUBLIC_MAIL_DOMAINS.has(domain) || !domain ? "Site : inconnu" : `Domaine : ${domain}`,
-    `Historique : ${contacts}, du ${dateFormat.format(prospect.createdAt)} au ${dateFormat.format(prospect.lastContactAt)}, sans réponse.`,
+    history,
   ].join("\n");
 }
 
 // hasReplied : au moins une réponse enregistrée (OutreachMessage INBOUND, lue par scripts/agent-inbound.mts).
 // activity et targetNiches : métier du registre et niches du broker, pour écarter les métiers de la toiture.
+// source : origine du prospect, pour le passage direct des prescripteurs importés (isImportedPrescriber).
 type Eligibility = {
   email: string;
   status: string;
@@ -176,6 +181,7 @@ type Eligibility = {
   hasReplied: boolean;
   activity: string | null;
   targetNiches: string[];
+  source?: string | null;
 };
 
 // Métiers de la toiture (couvreur, couverture, toiture, zinguerie), par le métier du registre ou par la niche du broker.
@@ -204,18 +210,30 @@ export function isOutOfPrescriberScope(prospect: { activity: string | null }) {
   return activity !== "" && !isPrescriberActivity(activity);
 }
 
+// Source des prospects ajoutés par scripts/import-prescribers.mts (lib/prescribers-import.ts).
+export const PRESCRIBER_SOURCE = "import-prescripteurs";
+
+// Prescripteur importé avec un métier de prescripteur. Il reste en statut « Nouveau », qui dit vrai : aucun email
+// n'a été envoyé. L'icebreaker l'ignore, et le Chasseur lui rédige le premier email, en brouillon.
+export function isImportedPrescriber(prospect: { source?: string | null; activity: string | null }) {
+  return prospect.source === PRESCRIBER_SOURCE && isPrescriberActivity(prospect.activity);
+}
+
 // Raison pour laquelle un prospect ne peut pas être ciblé, ou null s'il peut l'être.
 export function exclusionReason(prospect: Eligibility, blocklist: ReadonlySet<string>, now: Date) {
   if (blocklist.has(prospect.email)) return "blocklist";
   if (isExcludedStatus(prospect.status)) return "statut exclu";
   if (isRoofingTrade(prospect)) return "métier hors cible";
   if (isOutOfPrescriberScope(prospect)) return "métier hors cible";
-  // Jamais contacté : c'est un premier contact, qui relève de l'icebreaker et non d'une relance.
-  if (prospect.status === NEW_STATUS) return "jamais contacté";
+  // Jamais contacté : un premier contact relève de l'icebreaker, sauf pour un prescripteur importé (passage direct).
+  if (prospect.status === NEW_STATUS && !isImportedPrescriber(prospect)) return "jamais contacté";
   // Il a répondu (peut-être « STOP ») : la suite se fait à la main, jamais par une relance automatique.
   if (prospect.hasReplied) return "a répondu";
   if (prospect.hasDraft || prospect.status === DRAFT_STATUS) return "brouillon en attente";
-  if (now.getTime() - prospect.lastContactAt.getTime() < MIN_DAYS_SINCE_CONTACT * DAY_MS) return "contact récent";
+  // Le délai ne court qu'après un envoi : un prospect jamais contacté n'a pas de contact récent.
+  if (prospect.status !== NEW_STATUS && now.getTime() - prospect.lastContactAt.getTime() < MIN_DAYS_SINCE_CONTACT * DAY_MS) {
+    return "contact récent";
+  }
   return null;
 }
 

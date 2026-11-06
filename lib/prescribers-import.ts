@@ -1,10 +1,8 @@
 import { isExcludedStatus, isValidEmail, NEW_STATUS, normalizeEmail } from "./outreach";
-import { isPrescriberActivity, isRoofingTrade } from "./chasseur";
+import { isPrescriberActivity, isRoofingTrade, PRESCRIBER_SOURCE } from "./chasseur";
 
 // Import sécurisé des prescripteurs B2B (syndics, agences immobilières, architectes, promoteurs).
 // Module pur : la lecture de la base et les écritures sont faites par scripts/import-prescribers.mts.
-
-export const PRESCRIBER_SOURCE = "import-prescripteurs";
 
 /** Découpe un CSV. Le séparateur est lu sur l'en-tête : « ; » (Excel FR) ou « , ». Guillemets et sauts de ligne gérés. */
 export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
@@ -63,8 +61,8 @@ export type Plan = { creates: Creation[]; completions: Completion[]; unchanged: 
  * Décide, ligne par ligne, quoi faire. Un prescripteur doit avoir un métier qui contient un mot-clé obligatoire
  * et ne pas être de la toiture ; un désinscrit ou une adresse en blocklist n'est jamais touché.
  * Un prescripteur déjà en base n'a pas son statut modifié : seuls ses champs vides sont complétés.
- * Un nouveau prescripteur entre en statut « Nouveau » : c'est la file de l'icebreaker, comme pour l'import CSV.
- * Le Chasseur ne rédige qu'après un premier contact enregistré.
+ * Un nouveau prescripteur entre en statut « Nouveau », sans historique de contact : c'est vrai, il n'a jamais été
+ * contacté. L'icebreaker l'ignore (lib/outreach-ai.ts) et le Chasseur lui rédige le premier email (isImportedPrescriber).
  */
 export function planImport(rows: Record<string, string>[], headers: string[], ctx: PlanContext): Plan {
   const plan: Plan = { creates: [], completions: [], unchanged: 0, rejections: [], addressIgnored: headers.includes("address") && rows.some((row) => (row.address ?? "") !== "") };

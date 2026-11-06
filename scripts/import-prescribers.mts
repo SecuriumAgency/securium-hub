@@ -8,6 +8,8 @@
  * Fichier : data/prescripteurs-input.csv par défaut, ou --file=<chemin>. Séparateur « ; » ou « , ».
  * Colonnes obligatoires : company, email, metier. Facultatives : phone, city, address.
  * L'adresse n'a pas de champ dans le registre : elle est ignorée et le script le signale.
+ * Un nouveau prescripteur reste en statut Nouveau (jamais contacté) : il ne passe pas par l'icebreaker, et le Chasseur
+ * lui rédige le premier email, en brouillon à valider sur /admin/outreach. Rien n'est envoyé sans cette validation.
  * Les e-mails ne sont jamais affichés dans les logs.
  */
 import { existsSync, readFileSync } from "node:fs";
