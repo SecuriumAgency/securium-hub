@@ -156,6 +156,32 @@ async function ensureMedia(post: SocialPostRow, settings: IAfluencerSettingsInpu
   return mediaUrl;
 }
 
+/**
+ * Publie tout de suite un rush sur Instagram, en Reel : même légende et même workflow Meta que le moteur planifié.
+ * Ne s'exécute que sur demande explicite (bouton « Publier »), jamais en automatique.
+ */
+export async function publishRushNow(rushId: string): Promise<{ mediaId: string; caption: string }> {
+  const rush = await prisma.rush.findUnique({ where: { id: rushId }, select: { fileName: true, url: true } });
+  if (!rush) throw new PublishError("Rush introuvable.", "rejected", false);
+
+  const settings = await readSettings();
+  const caption = await generateSocialCaption(rush.fileName, "cybersécurité", settings.brandVoice);
+
+  const tokens = await readSocialTokens("instagram");
+  if (!tokens) throw new PublishError("Compte Instagram non connecté : connectez-le depuis IAfluencer.", "rejected", false);
+  const account = (await connectedAccounts()).get("instagram");
+  if (!account?.externalId) throw new PublishError("Identifiant Instagram manquant : reconnectez le compte.", "token_expired", false);
+
+  const mediaId = await publishToInstagram({
+    igUserId: account.externalId,
+    mediaUrl: rush.url,
+    caption,
+    format: "REELS",
+    accessToken: tokens.accessToken,
+  });
+  return { mediaId, caption };
+}
+
 async function publishPost(post: SocialPostRow, caption: string, mediaUrl: string): Promise<string> {
   const platform = post.platform as SocialPlatform;
   const tokens = await readSocialTokens(platform);

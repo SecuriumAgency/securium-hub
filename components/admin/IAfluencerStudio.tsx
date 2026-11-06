@@ -90,6 +90,32 @@ function RushDropzone({ rushes, onRegistered }: { rushes: RushItem[]; onRegister
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [publishing, setPublishing] = useState<string | null>(null);
+  const [publishNote, setPublishNote] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  // Publication immédiate sur Instagram : demandée seulement après confirmation, car la publication est publique.
+  async function publishNow(rush: RushItem) {
+    if (!window.confirm(`Publier « ${rush.fileName} » sur Instagram maintenant ?`)) return;
+    setPublishing(rush.id);
+    setPublishNote(null);
+    try {
+      const response = await fetch("/api/posts/publish-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rushId: rush.id }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string; mediaId?: string };
+      setPublishNote(
+        response.ok
+          ? { kind: "ok", text: `Publié sur Instagram (identifiant ${body.mediaId ?? "inconnu"}).` }
+          : { kind: "error", text: body.error ?? "Publication impossible." },
+      );
+    } catch {
+      setPublishNote({ kind: "error", text: "Connexion impossible. Réessayez." });
+    } finally {
+      setPublishing(null);
+    }
+  }
 
   function patch(id: string, change: Partial<UploadItem>) {
     setUploads((current) => current.map((item) => (item.id === id ? { ...item, ...change } : item)));
@@ -228,9 +254,23 @@ function RushDropzone({ rushes, onRegistered }: { rushes: RushItem[]; onRegister
                   {rush.sizeMb} Mo · déposé le {formatDay(new Date(rush.createdAt))}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => publishNow(rush)}
+                disabled={publishing !== null}
+                className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs text-primary transition-all duration-300 hover:shadow-[0_0_18px_-6px_var(--primary)] focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"
+              >
+                {publishing === rush.id ? <Loader2 aria-hidden className="size-3.5 animate-spin" /> : null}
+                {publishing === rush.id ? "Publication…" : "Publier (Instagram)"}
+              </button>
             </li>
           ))}
         </ul>
+        {publishNote && (
+          <p role={publishNote.kind === "error" ? "alert" : "status"} className={`text-xs ${publishNote.kind === "error" ? "text-destructive" : "text-foreground"}`}>
+            {publishNote.text}
+          </p>
+        )}
         </>
       )}
     </section>
