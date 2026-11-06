@@ -45,7 +45,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
     // Pipeline de closing : prospects déjà contactés par email, du plus récent au plus ancien.
     prisma.outreachProspect.findMany({
       where: contactedProspectsWhere(),
-      select: { id: true, company: true, phone: true, activity: true, lastContactAt: true, callStatus: true },
+      select: { id: true, company: true, phone: true, activity: true, targetNiches: true, targetZipCodes: true, lastContactAt: true, callStatus: true },
       orderBy: { lastContactAt: "desc" },
       take: 500,
     }),
@@ -55,6 +55,8 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
     company: prospect.company,
     phone: prospect.phone,
     activity: prospect.activity,
+    targetNiches: prospect.targetNiches,
+    targetZipCodes: prospect.targetZipCodes,
     sentAt: prospect.lastContactAt.toISOString(),
     callStatus: prospect.callStatus !== null && prospect.callStatus in CALL_STATUSES ? (prospect.callStatus as CallStatus) : null,
   }));

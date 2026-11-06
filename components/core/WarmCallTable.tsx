@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { QuickEditTargeting } from "@/components/admin/QuickEditTargeting";
 import { CALL_STATUSES, demoLink, departmentOf, type CallStatus } from "@/lib/warm-call";
 
 // Pipeline de closing (Warm Calling) : prospects déjà contactés par email, à rappeler au téléphone.
@@ -11,6 +12,8 @@ export type WarmCallRow = {
   company: string;
   phone: string | null;
   activity: string | null;
+  targetNiches: string[];
+  targetZipCodes: string[];
   sentAt: string;
   callStatus: CallStatus | null;
 };
@@ -83,7 +86,7 @@ export function WarmCallTable({ rows }: { rows: WarmCallRow[] }) {
           <tr>
             <th scope="col" className={HEAD}>Nom de l&apos;entreprise</th>
             <th scope="col" className={HEAD}>Téléphone</th>
-            <th scope="col" className={HEAD}>Niche / Secteur</th>
+            <th scope="col" className={HEAD}>Ciblage B2B</th>
             <th scope="col" className={HEAD}>Date d&apos;envoi</th>
             <th scope="col" className={HEAD}>Actions</th>
           </tr>
@@ -104,7 +107,9 @@ export function WarmCallTable({ rows }: { rows: WarmCallRow[] }) {
                     <span className="text-slate-500">—</span>
                   )}
                 </td>
-                <td className={CELL}>{row.activity ?? <span className="text-slate-500">—</span>}</td>
+                <td className={CELL}>
+                  <QuickEditTargeting id={row.id} company={row.company} niches={row.targetNiches} zones={row.targetZipCodes} activity={row.activity} />
+                </td>
                 <td className={`${CELL} whitespace-nowrap tabular-nums`}>{Number.isNaN(sent.getTime()) ? "—" : dateFormat.format(sent)}</td>
                 <td className="px-4 py-3 align-top">
                   <div className="flex min-w-[18rem] flex-col gap-2">
