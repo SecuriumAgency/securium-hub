@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { setPartnershipType } from "@/app/admin/broker/cpa-actions";
+import { createDeclarationLink } from "@/app/admin/broker/declaration-actions";
 import { PARTNERSHIP_LABELS, type PartnershipType } from "@/lib/broker/cpa-constants";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
@@ -32,6 +33,58 @@ const parseList = (value: string) =>
     .split(/[,;\s]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+
+// Lien que l'acheteur ouvre pour choisir lui-même ses métiers et ses zones. L'admin le copie et l'envoie
+// lui-même : rien n'est envoyé automatiquement. Le lien reste valable 30 jours, sans pouvoir être révoqué.
+function DeclarationLinkButton({ buyerId }: { buyerId: string }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function generate() {
+    setBusy(true);
+    setError(null);
+    const result = await createDeclarationLink(buyerId);
+    setBusy(false);
+    if (!result.ok) {
+      setLink(null);
+      setError(result.error);
+      return;
+    }
+    const url = `${window.location.origin}${result.path}`;
+    setLink(url);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Copie refusée par le navigateur : le lien reste dans le champ, sélectionnable à la main.
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-white/10 p-3">
+      <p className="text-xs text-slate-400">
+        Lien de déclaration : l&apos;acheteur choisit lui-même ses métiers et ses zones. Vous l&apos;envoyez vous-même.
+      </p>
+      <button type="button" onClick={generate} disabled={busy} className={BUTTON}>
+        {busy ? "Génération…" : link ? "Régénérer le lien" : "Générer le lien de déclaration"}
+      </button>
+      {link && (
+        <input
+          readOnly
+          value={link}
+          aria-label="Lien de déclaration"
+          onFocus={(event) => event.currentTarget.select()}
+          className={FIELD}
+        />
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-red-300">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
   const router = useRouter();
@@ -160,6 +213,7 @@ export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
             Zones (codes postaux ou départements)
             <input value={zones} onChange={(event) => setZones(event.target.value)} placeholder="ex. 95, 78, 75001" className={FIELD} />
           </label>
+          <DeclarationLinkButton buyerId={current.id} />
           {message && (
             <p role={message.kind === "error" ? "alert" : "status"} className={`text-sm ${message.kind === "error" ? "text-red-300" : "text-emerald-300"}`}>
               {message.text}

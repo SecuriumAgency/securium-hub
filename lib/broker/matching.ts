@@ -7,8 +7,9 @@ export type MatchableLead = { niche: string; postalCode: string | null; region: 
 export type MatchableArtisan = { targetNiches: string[]; targetZipCodes: string[] };
 export type MatchResult = { eligible: boolean; score: number; label: string };
 
-// Synonymes de niche : « PAC » désigne la pompe à chaleur, quelle que soit l'écriture saisie.
-const NICHE_ALIASES: Record<string, string> = { pac: "pompe-a-chaleur" };
+// Synonymes de niche : « PAC » désigne la pompe à chaleur, et « couverture » ou « couvreur » désignent la toiture,
+// quelle que soit l'écriture saisie ou déclarée.
+const NICHE_ALIASES: Record<string, string> = { pac: "pompe-a-chaleur", couverture: "toiture", couvreur: "toiture" };
 
 const slug = (value: string) => {
   const canonical = nicheSlug(value) ?? "";

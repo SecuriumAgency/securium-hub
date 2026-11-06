@@ -34,6 +34,8 @@ const PUBLIC_POSTS = new Set([
   "/api/agents/trigger",
   "/api/reports/upload",
   "/api/leads/public",
+  // Déclaration d'un acheteur depuis son lien signé : le jeton est la seule autorisation, vérifiée dans la route.
+  "/api/partenaire/declare",
   // Acquisition automatique (Chasseur) : appelle sans session, authentifiée par CHASSEUR_API_KEY dans la route.
   "/api/chasseur/ingest",
   // Stripe appelle ce webhook sans session : la signature est vérifiée dans la route.
@@ -42,7 +44,9 @@ const PUBLIC_POSTS = new Set([
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.has(pathname) || (request.method === "POST" && PUBLIC_POSTS.has(pathname))) {
+  // Lien de déclaration d'un acheteur (/partenaire/<jeton>) : la page vérifie le jeton et n'affiche rien sans lui.
+  const buyerLink = request.method === "GET" && pathname.startsWith("/partenaire/");
+  if (PUBLIC_PATHS.has(pathname) || buyerLink || (request.method === "POST" && PUBLIC_POSTS.has(pathname))) {
     return NextResponse.next();
   }
 
