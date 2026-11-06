@@ -20,6 +20,9 @@ export type BrokerLead = {
   suggestedPrice: number | null;
   createdAt: string;
   buyers: LeadBuyer[];
+  // Détail du projet (ex. « Installation PAC Air/Eau »), et exclusivité : vendu à un seul acheteur ou mutualisé.
+  projectIntent: string | null;
+  isExclusive: boolean;
 };
 
 // Acheteur compatible avec un lead (niche et zone) : client du broker ou artisan.
@@ -97,6 +100,20 @@ const LEAD_COLUMNS: SortColumn<LeadKey>[] = [
   { key: "createdAt", label: "Reçu le", defaultDirection: "desc" },
   { key: "buyers", label: "Acheteurs compatibles", defaultDirection: "desc" },
 ];
+
+// Qualification du lead : exclusif (vendu une seule fois) ou mutualisé (vendable plusieurs fois).
+// Couleurs de la charte sombre, équivalentes aux teintes violette et bleue demandées.
+function LeadKindBadge({ exclusive }: { exclusive: boolean }) {
+  return exclusive ? (
+    <span className="inline-flex w-fit rounded-md border border-violet-500/40 bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-200">
+      💎 Exclusif
+    </span>
+  ) : (
+    <span className="inline-flex w-fit rounded-md border border-sky-500/40 bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-200">
+      🔄 Mutualisé
+    </span>
+  );
+}
 
 export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
   const router = useRouter();
@@ -258,7 +275,13 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                       className="size-5 accent-amber-400"
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium text-white">{lead.name}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <p className="font-medium text-white">{lead.name}</p>
+                    <div className="mt-1 flex flex-col items-start gap-1">
+                      <LeadKindBadge exclusive={lead.isExclusive} />
+                      {lead.projectIntent && <p className="max-w-xs text-xs text-slate-400">{lead.projectIntent}</p>}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-sm tabular-nums text-slate-200">{lead.phone}</td>
                   <td className="px-4 py-3 text-sm text-slate-200">{lead.niche.replace(/-/g, " ")}</td>
                   <td className="px-4 py-3 text-sm text-slate-200">{lead.region ?? "—"}</td>
@@ -294,7 +317,7 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="min-w-0 truncate text-sm font-medium text-white">{lead.name}</p>
+                    <div className="flex min-w-0 flex-col items-start gap-1"><p className="min-w-0 truncate text-sm font-medium text-white">{lead.name}</p><LeadKindBadge exclusive={lead.isExclusive} />{lead.projectIntent && <p className="text-xs text-slate-400">{lead.projectIntent}</p>}</div>
                     <span className={`inline-flex shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${QUALITY_BADGE[lead.quality].className}`}>
                       {QUALITY_BADGE[lead.quality].label}
                     </span>

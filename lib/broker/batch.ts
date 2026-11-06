@@ -28,6 +28,14 @@ export class BrokerError extends Error {
 
 const cents = (value: number) => Math.round(value * 100) / 100;
 
+/**
+ * Qualification et exclusivité : un lead exclusif ne se vend qu'une fois. Renvoie l'erreur à lever, ou null.
+ * Un lead mutualisé reste vendable tant que soldCount n'a pas atteint maxSales (la revente multiple est à venir).
+ */
+export function exclusivityViolation(leads: { isExclusive: boolean; soldCount: number }[]): BrokerError | null {
+  return leads.some((lead) => lead.isExclusive && lead.soldCount >= 1) ? new BrokerError("Ce lead exclusif a déjà été vendu.", 409) : null;
+}
+
 export type BatchResult = { batchId: string; count: number; total: number; billing: "manual" | "stripe_pending" };
 
 /**
@@ -49,7 +57,7 @@ export async function createLeadBatch(input: CreateBatchInput, now = new Date())
     const eligible = { id: { in: ids }, status: "AVAILABLE" as const, consentToShare: true };
     const leads = await tx.capturedLead.findMany({
       where: eligible,
-      select: { id: true, quality: true, niche: true, region: true, postalCode: true, suggestedPrice: true },
+      select: { id: true, quality: true, niche: true, region: true, postalCode: true, suggestedPrice: true, isExclusive: true, soldCount: true },
     });
 
     // Anti-erreur : l'artisan doit être compatible (niche et zone) avec chacun des leads du lot.
@@ -58,6 +66,8 @@ export async function createLeadBatch(input: CreateBatchInput, now = new Date())
       throw new BrokerError(`Artisan non compatible avec ${incompatible.length} lead(s) du lot : niche ou zone non couverte.`, 400);
     }
     if (leads.length !== ids.length) throw new BrokerError("Certains leads ne sont plus disponibles ou ne peuvent pas être cédés.", 409);
+    const exclusivity = exclusivityViolation(leads);
+    if (exclusivity) throw exclusivity;
 
     const count = ids.length;
     const suggestedOf = (lead: { quality: LeadQuality; niche: string; suggestedPrice: number | null }) =>
@@ -91,7 +101,7 @@ export async function createLeadBatch(input: CreateBatchInput, now = new Date())
     for (const lead of leads) {
       const updated = await tx.capturedLead.updateMany({
         where: { id: lead.id, status: "AVAILABLE", consentToShare: true },
-        data: { status: "SOLD", buyerId: buyer.id, batchId: batch.id, price: perLead.get(lead.id) ?? null, soldAt: now },
+        data: { status: "SOLD", soldCount: { increment: 1 }, buyerId: buyer.id, batchId: batch.id, price: perLead.get(lead.id) ?? null, soldAt: now },
       });
       if (updated.count !== 1) throw new BrokerError("Vente interrompue : un lead a changé d'état.", 409);
     }

@@ -28,7 +28,7 @@ export default async function BrokerPage() {
       where: { status: "AVAILABLE", consentToShare: true },
       orderBy: { createdAt: "desc" },
       take: 500,
-      select: { id: true, name: true, phone: true, niche: true, region: true, postalCode: true, urgency: true, quality: true, suggestedPrice: true, createdAt: true },
+      select: { id: true, name: true, phone: true, niche: true, region: true, postalCode: true, urgency: true, quality: true, suggestedPrice: true, createdAt: true, projectIntent: true, isExclusive: true },
     }),
     prisma.leadBatch.findMany({
       orderBy: { createdAt: "desc" },
@@ -61,6 +61,8 @@ export default async function BrokerPage() {
       suggestedPrice: lead.suggestedPrice,
       createdAt: lead.createdAt.toISOString(),
       buyers: matches,
+      projectIntent: lead.projectIntent,
+      isExclusive: lead.isExclusive,
     };
   });
 
