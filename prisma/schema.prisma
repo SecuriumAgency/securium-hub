@@ -298,6 +298,13 @@ model CapturedLead {
   batch          LeadBatch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
   soldAt         DateTime?
   stripeSessionId String? @unique
+  // Origine de l'entrée (ex. « chasseur-osint »), intention du client, et exclusivité de la vente.
+  source         String?
+  projectIntent  String?
+  // Exclusif : vendu à un seul acheteur. Sinon, mutualisé, vendable jusqu'à maxSales fois.
+  isExclusive    Boolean            @default(false)
+  soldCount      Int                @default(0)
+  maxSales       Int                @default(3)
   createdAt      DateTime           @default(now())
 
   @@index([status, consentToShare])

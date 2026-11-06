@@ -32,6 +32,8 @@ const PUBLIC_POSTS = new Set([
   "/api/agents/trigger",
   "/api/reports/upload",
   "/api/leads/public",
+  // Acquisition automatique (Chasseur) : appelle sans session, authentifiée par CHASSEUR_API_KEY dans la route.
+  "/api/chasseur/ingest",
   // Stripe appelle ce webhook sans session : la signature est vérifiée dans la route.
   "/api/webhooks/stripe",
 ]);
