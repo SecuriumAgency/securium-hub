@@ -7,6 +7,8 @@ import { BrokerSales, type SaleRow } from "@/components/admin/BrokerSales";
 import { CpaPipeline, type CpaRow } from "@/components/admin/CpaPipeline";
 import { BrokerTable, type BrokerLead, type LeadBuyer } from "@/components/admin/BrokerTable";
 import { SectionTabs } from "@/components/admin/SectionTabs";
+import { CompletenessPanel } from "@/components/admin/CompletenessPanel";
+import { completenessPercent, matchingPercent, systemPercent } from "@/lib/broker/completeness";
 import { evaluateMatch } from "@/lib/broker/matching";
 import { prisma } from "@/lib/prisma";
 
@@ -23,7 +25,7 @@ export default async function BrokerPage() {
     prisma.outreachProspect.findMany({
       orderBy: { company: "asc" },
       take: 1000,
-      select: { id: true, company: true, city: true, activity: true, targetNiches: true, targetZipCodes: true, isClient: true, partnershipType: true },
+      select: { id: true, company: true, phone: true, email: true, city: true, activity: true, targetNiches: true, targetZipCodes: true, isClient: true, partnershipType: true },
     }),
     prisma.capturedLead.findMany({
       where: { status: "AVAILABLE", consentToShare: true },
@@ -103,6 +105,7 @@ export default async function BrokerPage() {
     partnershipType: buyer.partnershipType,
     compatibleLeads: stats.get(buyer.id)?.count ?? 0,
     bestScore: stats.get(buyer.id)?.best ?? null,
+    completeness: completenessPercent(buyer),
   }));
 
   const sales: SaleRow[] = batchRows.map((batch) => ({
@@ -138,6 +141,14 @@ export default async function BrokerPage() {
             <span className="font-semibold tabular-nums text-foreground">{buyers.length}</span> acheteur{buyers.length > 1 ? "s" : ""} configuré{buyers.length > 1 ? "s" : ""}.
           </p>
         </header>
+
+        <CompletenessPanel
+          total={buyerRows.length}
+          prospecteur={systemPercent(buyerRows, "prospecteur")}
+          chasseur={systemPercent(buyerRows, "chasseur")}
+          broker={systemPercent(buyerRows, "broker")}
+          matching={matchingPercent(buyerRows)}
+        />
 
         <BrokerGuide />
 

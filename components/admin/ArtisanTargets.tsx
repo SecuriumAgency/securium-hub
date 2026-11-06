@@ -20,6 +20,8 @@ export type ArtisanRow = {
   compatibleLeads?: number;
   bestScore?: number | null;
   partnershipType?: string;
+  // Part des six critères remplis (téléphone, e-mail, ville, métier, niches, zones), de 0 à 100.
+  completeness?: number;
 };
 
 const FIELD =
@@ -252,6 +254,11 @@ export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
                       {artisan.company}
                       {artisan.city ? ` · ${artisan.city}` : ""}
                     </span>
+                    {artisan.completeness !== undefined && (
+                      <span className={`truncate text-xs ${artisan.completeness === 100 ? "text-emerald-300" : "text-slate-300"}`}>
+                        Complétude {artisan.completeness} %
+                      </span>
+                    )}
                     {artisan.partnershipType && (
                       <span className="truncate text-xs text-amber-200">
                         {PARTNERSHIP_LABELS[artisan.partnershipType as PartnershipType] ?? artisan.partnershipType}
