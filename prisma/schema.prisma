@@ -87,6 +87,8 @@ model OutreachProspect {
   targetZipCodes String[] @default([])
   // Client du broker (ex. Geo Energy Habitat) : acheteur, jamais un prospect. Exclu du Kanban, des listes et des compteurs.
   isClient       Boolean  @default(false)
+  // Mode d'achat : CPL (achat immédiat d'un lead) ou CPA (apporteur d'affaires : commission sur le chantier).
+  partnershipType String @default("CPL")
   // Leads capturés achetés par cet artisan, et lots reçus.
   capturedLeads CapturedLead[]
   leadBatches   LeadBatch[]
@@ -305,6 +307,9 @@ model CapturedLead {
   isExclusive    Boolean            @default(false)
   soldCount      Int                @default(0)
   maxSales       Int                @default(3)
+  // Suivi CPA : TRANSMIS, DEVIS_EN_COURS, SIGNE, CHANTIER_DEMARRE, COMMISSION_PAYEE. Vide pour une vente CPL.
+  dealStatus     String?
+  expectedCommission Float?
   createdAt      DateTime           @default(now())
 
   @@index([status, consentToShare])

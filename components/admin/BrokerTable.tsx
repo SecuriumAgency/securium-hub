@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { calculateBatchDiscount, calculateSuggestedPrice, type LeadQuality } from "@/lib/broker/pricingEngine";
 import { MobileSort, SortHeader, type SortColumn } from "@/components/admin/SortControls";
 import { useSort, type Accessors } from "@/components/admin/useSort";
+import { transmitLeadsToPartner } from "@/app/admin/broker/cpa-actions";
 
 // Lead Broker : leads disponibles, sélection multiple, vente à l'unité ou par lot.
 // Déterministe : aucun appel à un modèle. Le prix suggéré vient du moteur de pricing, il reste modifiable.
@@ -29,7 +30,7 @@ export type BrokerLead = {
 export type LeadBuyer = { id: string; company: string; isClient: boolean; score: number; label: string };
 
 // Artisan compatible avec tous les leads sélectionnés (niche et zone), renvoyé par /api/broker/match.
-export type EligibleArtisan = { id: string; company: string; city: string | null; score: number; label: string };
+export type EligibleArtisan = { id: string; company: string; city: string | null; score: number; label: string; partnershipType: string };
 
 const URGENCY_LABEL: Record<string, string> = { immediat: "Immédiat", "3_mois": "Dans 3 mois", "6_mois": "Dans 6 mois" };
 const QUALITY_BADGE: Record<LeadQuality, { label: string; className: string }> = {
@@ -132,6 +133,8 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
   const selectedKey = [...selected].sort().join(",");
   // Sans sélection, aucun artisan n'est proposé.
   const visibleArtisans = count > 0 ? artisans : [];
+  // Acheteur en mode apporteur d'affaires (CPA) : transmission sans prix, sans lot, sans Stripe.
+  const isCpa = visibleArtisans.find((artisan) => artisan.id === buyerId)?.partnershipType === "CPA";
 
   // Dès qu'un lead est sélectionné, les artisans compatibles avec TOUS les leads sont recherchés (niche et zone).
   useEffect(() => {
@@ -192,6 +195,25 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
     event.preventDefault();
     setMessage(null);
     if (!buyerId) return setMessage({ kind: "error", text: "Choisissez l'acheteur." });
+    if (isCpa) {
+      setBusy(true);
+      try {
+        const result = await transmitLeadsToPartner([...selected], buyerId);
+        if (!result.ok) {
+          setMessage({ kind: "error", text: result.error });
+          return;
+        }
+        setMessage({ kind: "ok", text: `${result.count ?? count} lead(s) transmis au partenaire (CPA). Commissions à suivre dans l'onglet Ventes.` });
+        setSelected(new Set());
+        setOpen(false);
+        router.refresh();
+      } catch {
+        setMessage({ kind: "error", text: "Connexion impossible. Réessayez." });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (mode === "unit" && !(unit > 0)) return setMessage({ kind: "error", text: "Prix unitaire invalide." });
     if (mode === "batch" && !(batch > 0)) return setMessage({ kind: "error", text: "Prix du lot invalide." });
     setBusy(true);
@@ -363,6 +385,7 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
             </h2>
 
             <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
+              {!isCpa && (
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
                 <p>
                   Prix total suggéré : <span className="font-semibold tabular-nums text-white">{euros(suggestion.total)}</span>
@@ -372,7 +395,9 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                 )}
                 <p className="text-xs text-slate-500">Vous pouvez remplacer ce prix ci-dessous avant de confirmer.</p>
               </div>
+              )}
 
+              {!isCpa && (
               <fieldset className="flex flex-col gap-2">
                 <legend className="mb-2 text-sm text-slate-300">Mode de vente</legend>
                 <label className="flex items-center gap-2 text-sm text-white">
@@ -384,8 +409,13 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                   Par lot : un prix global
                 </label>
               </fieldset>
+              )}
 
-              {mode === "unit" ? (
+              {isCpa ? (
+                <p className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 text-xs text-violet-200">
+                  Transmission sans prix : le partenaire est rémunéré à la commission, une fois le chantier signé.
+                </p>
+              ) : mode === "unit" ? (
                 <label className="flex flex-col gap-1 text-sm text-slate-300">
                   Prix par lead (€)
                   <input inputMode="decimal" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} className={FIELD} />
@@ -452,7 +482,7 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                   Annuler
                 </button>
                 <button type="submit" disabled={busy} className={`${BUTTON} border-amber-400/60 bg-amber-400/15 text-amber-200`}>
-                  {busy ? "Enregistrement…" : "Confirmer la vente"}
+                  {busy ? "Enregistrement…" : isCpa ? "Transmettre au partenaire (CPA)" : "Confirmer la vente"}
                 </button>
               </div>
             </form>

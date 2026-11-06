@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { setPartnershipType } from "@/app/admin/broker/cpa-actions";
+import { PARTNERSHIP_LABELS, type PartnershipType } from "@/lib/broker/cpa-constants";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 // Critères des artisans acheteurs : niches (corps de métier) et zones (codes postaux ou départements).
@@ -16,6 +18,7 @@ export type ArtisanRow = {
   // Vue inverse du matching : leads disponibles compatibles, et meilleur score (100 ou 80).
   compatibleLeads?: number;
   bestScore?: number | null;
+  partnershipType?: string;
 };
 
 const FIELD =
@@ -39,6 +42,7 @@ export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const [mode, setMode] = useState<string>("CPL");
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -59,7 +63,21 @@ export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
     setCurrent(artisan);
     setNiches(artisan.targetNiches.join(", "));
     setZones(artisan.targetZipCodes.join(", "));
+    setMode(artisan.partnershipType ?? "CPL");
     setMessage(null);
+  }
+
+  // Mode d'achat : CPL (achat immédiat) ou CPA (apporteur d'affaires). Enregistré tout de suite.
+  async function changeMode(next: string) {
+    if (!current) return;
+    setMode(next);
+    const result = await setPartnershipType(current.id, next);
+    if (result.ok) {
+      setMessage({ kind: "ok", text: "Mode d'achat enregistré." });
+      router.refresh();
+    } else {
+      setMessage({ kind: "error", text: result.error });
+    }
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -118,6 +136,16 @@ export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
         >
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-white">{current.company}</p>
+          <label className="flex flex-col gap-1 text-sm text-slate-300">
+            Mode d&apos;achat
+            <select value={mode} onChange={(event) => changeMode(event.target.value)} className={FIELD}>
+              {(Object.keys(PARTNERSHIP_LABELS) as PartnershipType[]).map((value) => (
+                <option key={value} value={value}>
+                  {PARTNERSHIP_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
             <p className="text-xs text-slate-400">
               {current.targetNiches.length > 0 && current.targetZipCodes.length > 0
                 ? `Actuellement : ${current.targetNiches.length} niche(s) · ${current.targetZipCodes.length} zone(s)`
@@ -170,6 +198,11 @@ export function ArtisanTargets({ artisans }: { artisans: ArtisanRow[] }) {
                       {artisan.company}
                       {artisan.city ? ` · ${artisan.city}` : ""}
                     </span>
+                    {artisan.partnershipType && (
+                      <span className="truncate text-xs text-amber-200">
+                        {PARTNERSHIP_LABELS[artisan.partnershipType as PartnershipType] ?? artisan.partnershipType}
+                      </span>
+                    )}
                     {artisan.compatibleLeads !== undefined && (
                       <span className={`truncate text-xs ${artisan.compatibleLeads > 0 ? "text-emerald-300" : "text-slate-500"}`}>
                         {artisan.compatibleLeads} lead{artisan.compatibleLeads > 1 || artisan.compatibleLeads === 0 ? "s" : ""} compatible

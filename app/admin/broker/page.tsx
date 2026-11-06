@@ -4,6 +4,7 @@ import { ArtisanTargets, type ArtisanRow } from "@/components/admin/ArtisanTarge
 import { BrokerClients, type BrokerClient } from "@/components/admin/BrokerClients";
 import { BrokerGuide } from "@/components/admin/BrokerGuide";
 import { BrokerSales, type SaleRow } from "@/components/admin/BrokerSales";
+import { CpaPipeline, type CpaRow } from "@/components/admin/CpaPipeline";
 import { BrokerTable, type BrokerLead, type LeadBuyer } from "@/components/admin/BrokerTable";
 import { SectionTabs } from "@/components/admin/SectionTabs";
 import { evaluateMatch } from "@/lib/broker/matching";
@@ -18,11 +19,11 @@ export const dynamic = "force-dynamic";
 
 export default async function BrokerPage() {
   // Acheteurs (artisans et clients), leads disponibles et cessibles, et ventes déjà créées.
-  const [buyerRows, leadRows, batchRows] = await Promise.all([
+  const [buyerRows, leadRows, batchRows, cpaRows] = await Promise.all([
     prisma.outreachProspect.findMany({
       orderBy: { company: "asc" },
       take: 1000,
-      select: { id: true, company: true, city: true, activity: true, targetNiches: true, targetZipCodes: true, isClient: true },
+      select: { id: true, company: true, city: true, activity: true, targetNiches: true, targetZipCodes: true, isClient: true, partnershipType: true },
     }),
     prisma.capturedLead.findMany({
       where: { status: "AVAILABLE", consentToShare: true },
@@ -34,6 +35,13 @@ export default async function BrokerPage() {
       orderBy: { createdAt: "desc" },
       take: 200,
       select: { id: true, name: true, totalPrice: true, status: true, createdAt: true, buyer: { select: { company: true } }, _count: { select: { leads: true } } },
+    }),
+    // Leads transmis à un apporteur d'affaires (CPA) : leur étape et leur commission sont suivies.
+    prisma.capturedLead.findMany({
+      where: { dealStatus: { not: null } },
+      orderBy: { soldAt: "desc" },
+      take: 200,
+      select: { id: true, name: true, niche: true, dealStatus: true, expectedCommission: true, soldAt: true, buyer: { select: { company: true } } },
     }),
   ]);
 
@@ -92,6 +100,7 @@ export default async function BrokerPage() {
     activity: buyer.activity,
     targetNiches: buyer.targetNiches,
     targetZipCodes: buyer.targetZipCodes,
+    partnershipType: buyer.partnershipType,
     compatibleLeads: stats.get(buyer.id)?.count ?? 0,
     bestScore: stats.get(buyer.id)?.best ?? null,
   }));
@@ -104,6 +113,16 @@ export default async function BrokerPage() {
     createdAt: batch.createdAt.toISOString(),
     buyer: batch.buyer?.company ?? null,
     leadCount: batch._count.leads,
+  }));
+
+  const cpaPipeline: CpaRow[] = cpaRows.map((lead) => ({
+    id: lead.id,
+    name: lead.name,
+    company: lead.buyer?.company ?? null,
+    niche: lead.niche,
+    dealStatus: lead.dealStatus as CpaRow["dealStatus"],
+    expectedCommission: lead.expectedCommission,
+    soldAt: lead.soldAt ? lead.soldAt.toISOString() : null,
   }));
 
   return (
@@ -146,7 +165,12 @@ export default async function BrokerPage() {
               id: "ventes",
               label: "Ventes",
               count: sales.length,
-              content: <BrokerSales sales={sales} />,
+              content: (
+                <div className="flex flex-col gap-8">
+                  <BrokerSales sales={sales} />
+                  <CpaPipeline rows={cpaPipeline} />
+                </div>
+              ),
             },
           ]}
         />
