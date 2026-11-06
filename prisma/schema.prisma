@@ -290,6 +290,9 @@ model CapturedLead {
   urgency        String?
   message        String?
   consentToShare Boolean            @default(false)
+  // Preuve du consentement à la cession (RGPD, art. 7) : moment exact de l'accord et version du texte affiché.
+  consentAt      DateTime?
+  consentVersion String?
   status         CapturedLeadStatus @default(AVAILABLE)
   price          Float?
   quality        LeadQuality @default(MOYEN)

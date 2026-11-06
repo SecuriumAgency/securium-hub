@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { PUBLIC_SITE_ID, PublicLeadSchema } from "@/lib/public-leads-rules";
+import { PUBLIC_SITE_ID, PublicLeadSchema, consentProof } from "@/lib/public-leads-rules";
 import { calculateSuggestedPrice, classifyLeadQuality } from "@/lib/broker/pricingEngine";
 import { takeRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
@@ -83,7 +83,8 @@ export async function POST(request: NextRequest) {
           postalCode: lead.postalCode,
           urgency: lead.urgency,
           message,
-          consentToShare: lead.shareConsent === true,
+          // Accord horodaté et versionné, seulement si la case est cochée. Sans elle, rien n'est vendable.
+          ...consentProof(lead.shareConsent === true, new Date()),
           // Qualité et prix suggéré calculés ici, sans IA : même formulaire, même résultat.
           quality,
           suggestedPrice: calculateSuggestedPrice(quality, lead.niche),

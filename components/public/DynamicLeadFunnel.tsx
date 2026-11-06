@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { nicheLabel, URGENCIES, type Urgency } from "@/lib/public-leads-rules";
+import { SHARE_CONSENT_TEXT, URGENCIES, nicheLabel, type Urgency } from "@/lib/public-leads-rules";
 
 // Tunnel multi-étapes du /devis. La niche et le département viennent de l'URL et adaptent le texte.
 type Props = { niche: string | null; region: string | null };
@@ -239,9 +239,7 @@ export function DynamicLeadFunnel({ niche, region }: Props) {
               onChange={(event) => setShareConsent(event.target.checked)}
               className="mt-1 size-5 shrink-0 accent-amber-400"
             />
-            <span>
-              J&apos;accepte que mes coordonnées soient transmises à des artisans partenaires de ma région, pour recevoir d&apos;autres devis (facultatif).
-            </span>
+            <span>{SHARE_CONSENT_TEXT}</span>
           </label>
 
           {error && (

@@ -55,3 +55,16 @@ export const PublicLeadSchema = z.object({
 });
 
 export type PublicLead = z.infer<typeof PublicLeadSchema>;
+
+// Accord à la cession des coordonnées. Le texte affiché vit ici, et sa version est enregistrée avec chaque
+// accord : à chaque changement de texte, la version change aussi, pour savoir ce qui a été accepté.
+export const SHARE_CONSENT_VERSION = "devis-share-2026-11-06";
+export const SHARE_CONSENT_TEXT =
+  "J'accepte que mes coordonnées (nom, téléphone, e-mail, code postal) soient transmises à des artisans partenaires de ma région, pour l'étude de mon projet énergétique. Facultatif : sans cette case, mes coordonnées ne sont jamais transmises. Je peux retirer mon accord à tout moment.";
+
+/** Preuve du consentement : horodatage et version du texte, uniquement si la case est cochée. */
+export function consentProof(shareConsent: boolean, now: Date) {
+  return shareConsent
+    ? { consentToShare: true, consentAt: now, consentVersion: SHARE_CONSENT_VERSION }
+    : { consentToShare: false, consentAt: null, consentVersion: null };
+}
