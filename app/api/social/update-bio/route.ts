@@ -4,8 +4,9 @@ import { bioErrors, SOCIAL_PLATFORMS } from "@/lib/agents/iafluencer-rules";
 import { connectedAccounts } from "@/lib/social-accounts";
 import { prisma } from "@/lib/prisma";
 
-// Bio commune IAfluencer. Enregistrée ici ; son envoi vers les profils Instagram et TikTok n'est pas
-// encore branché : la réponse le dit explicitement. Session admin (middleware).
+// Bio commune IAfluencer. Enregistrée dans le Hub. Meta (Instagram) et TikTok n'offrent pas d'API publique pour
+// modifier la biographie d'un compte : la réponse le dit explicitement, et le texte est à copier dans chaque profil.
+// Session admin (middleware).
 const BioSchema = z.object({ bio: z.string().max(500) });
 
 export async function POST(request: NextRequest) {
@@ -33,7 +34,12 @@ export async function POST(request: NextRequest) {
       create: { id: "default", bio },
       update: { bio },
     });
-    return NextResponse.json({ ok: true, pushed: false, message: "Bio enregistrée. L'envoi vers les profils n'est pas encore branché." });
+    return NextResponse.json({
+      ok: true,
+      pushed: false,
+      reason: "api_non_disponible",
+      message: "Bio enregistrée dans le Hub. Meta et TikTok n'autorisent pas sa modification par API : copiez-la dans chaque profil.",
+    });
   } catch (error) {
     console.error("[social] bio impossible à enregistrer :", error instanceof Error ? error.message : "erreur inconnue");
     return NextResponse.json({ error: "Enregistrement impossible." }, { status: 500 });

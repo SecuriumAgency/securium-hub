@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from "react";
 import { upload } from "@vercel/blob/client";
-import { CalendarDays, Film, Plus, Upload } from "lucide-react";
+import { CalendarDays, Film, Loader2, Plus, Upload } from "lucide-react";
 import { BIO_LIMITS, CAPTION_MAX, PLATFORM_LABELS, SOCIAL_PLATFORMS, bioErrors, type SocialPlatform } from "@/lib/agents/iafluencer-rules";
 import { validateUpload } from "@/lib/media/upload-rules";
 import { IAfluencerAutopilot, type AutopilotSettings } from "@/components/admin/IAfluencerAutopilot";
@@ -311,11 +311,12 @@ function BrandControl({ connections, settings, initialBio }: { connections: Conn
 
       <div className="mt-auto flex flex-col gap-2">
         <button type="button" onClick={sync} disabled={!canSync} className={primaryButton}>
-          {busy ? "Enregistrement…" : "Synchroniser sur Instagram et TikTok"}
+          {busy ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
+          {busy ? "Enregistrement…" : "Enregistrer la bio"}
         </button>
         <p className="text-xs text-muted-foreground">
           {anyConnected
-            ? `Connectés : ${connectedNames.join(", ")}. La bio est enregistrée ; son envoi vers les profils n'est pas encore branché.`
+            ? `Comptes connectés : ${connectedNames.join(", ")}. Meta et TikTok n'autorisent pas la modification de la biographie par API : le texte est enregistré ici, à copier dans chaque profil.`
             : "Synchronisation désactivée : aucun compte n'est encore connecté (voir l'état des connexions ci-dessus)."}
         </p>
         {message && (
