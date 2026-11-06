@@ -167,12 +167,31 @@ export function prospectContext(prospect: ProspectFacts) {
 }
 
 // hasReplied : au moins une réponse enregistrée (OutreachMessage INBOUND, lue par scripts/agent-inbound.mts).
-type Eligibility = { email: string; status: string; lastContactAt: Date; hasDraft: boolean; hasReplied: boolean };
+// activity et targetNiches : métier du registre et niches du broker, pour écarter les métiers de la toiture.
+type Eligibility = {
+  email: string;
+  status: string;
+  lastContactAt: Date;
+  hasDraft: boolean;
+  hasReplied: boolean;
+  activity: string | null;
+  targetNiches: string[];
+};
+
+// Métiers de la toiture (couvreur, couverture, toiture, zinguerie), par le métier du registre ou par la niche du broker.
+// Le brief vise désormais les prescripteurs : le Chasseur ne rédige jamais pour ces prospects.
+const ROOFING_ACTIVITY = /couvr|couverture|toiture|zingu/;
+const ROOFING_NICHES = new Set(["toiture", "couverture"]);
+export function isRoofingTrade(prospect: { activity: string | null; targetNiches: string[] }) {
+  const activity = (prospect.activity ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return ROOFING_ACTIVITY.test(activity) || prospect.targetNiches.some((niche) => ROOFING_NICHES.has(niche));
+}
 
 // Raison pour laquelle un prospect ne peut pas être ciblé, ou null s'il peut l'être.
 export function exclusionReason(prospect: Eligibility, blocklist: ReadonlySet<string>, now: Date) {
   if (blocklist.has(prospect.email)) return "blocklist";
   if (isExcludedStatus(prospect.status)) return "statut exclu";
+  if (isRoofingTrade(prospect)) return "métier hors cible";
   // Jamais contacté : c'est un premier contact, qui relève de l'icebreaker et non d'une relance.
   if (prospect.status === NEW_STATUS) return "jamais contacté";
   // Il a répondu (peut-être « STOP ») : la suite se fait à la main, jamais par une relance automatique.
