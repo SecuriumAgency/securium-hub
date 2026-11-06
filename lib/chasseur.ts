@@ -187,11 +187,21 @@ export function isRoofingTrade(prospect: { activity: string | null; targetNiches
   return ROOFING_ACTIVITY.test(activity) || prospect.targetNiches.some((niche) => ROOFING_NICHES.has(niche));
 }
 
+// Prescripteurs visés par le brief : syndics, agences immobilières, architectes, promoteurs.
+// Un prospect dont le métier est renseigné et ne correspond à aucun d'eux est hors cible (artisans, commerces…).
+// Un prospect sans métier n'est pas écarté ici : son métier n'est pas connu, la règle ne le juge pas.
+const PRESCRIBER_ACTIVITY = /syndic|immobili|architect|promot|locati/;
+export function isOutOfPrescriberScope(prospect: { activity: string | null }) {
+  const activity = (prospect.activity ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+  return activity !== "" && !PRESCRIBER_ACTIVITY.test(activity);
+}
+
 // Raison pour laquelle un prospect ne peut pas être ciblé, ou null s'il peut l'être.
 export function exclusionReason(prospect: Eligibility, blocklist: ReadonlySet<string>, now: Date) {
   if (blocklist.has(prospect.email)) return "blocklist";
   if (isExcludedStatus(prospect.status)) return "statut exclu";
   if (isRoofingTrade(prospect)) return "métier hors cible";
+  if (isOutOfPrescriberScope(prospect)) return "métier hors cible";
   // Jamais contacté : c'est un premier contact, qui relève de l'icebreaker et non d'une relance.
   if (prospect.status === NEW_STATUS) return "jamais contacté";
   // Il a répondu (peut-être « STOP ») : la suite se fait à la main, jamais par une relance automatique.
