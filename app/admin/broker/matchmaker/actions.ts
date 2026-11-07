@@ -4,9 +4,8 @@ import { z } from "zod";
 import { hasAdminSession } from "@/lib/admin-session";
 import { BrokerError, createLeadBatch } from "@/lib/broker/batch";
 import { transmitToPartner } from "@/lib/broker/cpa";
-import { evaluateMatch } from "@/lib/broker/matching";
 import { prisma } from "@/lib/prisma";
-import { MAX_ASSIGN, isActivePartner } from "@/lib/matchmaker";
+import { MAX_ASSIGN, evaluateMatchmaker, isActivePartner } from "@/lib/matchmaker";
 
 // Assignation depuis le Matchmaker. Deux chemins, déjà utilisés par le Lead Broker :
 // - partenaire CPA : transmission sans prix (0 €), commission suivie ensuite dans Ventes ;
@@ -44,7 +43,7 @@ export async function assignLeadsToPartner(buyerId: string, leadIds: string[]): 
     if (leads.length !== ids.length) {
       return { ok: false, error: "Certains leads ne sont plus disponibles : actualisez la page." };
     }
-    if (leads.some((lead) => !evaluateMatch(lead, buyer).eligible)) {
+    if (leads.some((lead) => !evaluateMatchmaker(lead, buyer).eligible)) {
       return { ok: false, error: "Partenaire incompatible avec au moins un lead : actualisez la page." };
     }
 
@@ -52,7 +51,7 @@ export async function assignLeadsToPartner(buyerId: string, leadIds: string[]): 
       const result = await transmitToPartner(ids, buyer.id);
       return { ok: true, mode: "CPA", count: result.count, total: 0, billing: null };
     }
-    const result = await createLeadBatch({ leadIds: ids, buyerId: buyer.id, mode: "batch" });
+    const result = await createLeadBatch({ leadIds: ids, buyerId: buyer.id, mode: "batch" }, new Date(), { adjacency: true });
     return { ok: true, mode: "CPL", count: result.count, total: result.total, billing: result.billing };
   } catch (error) {
     if (error instanceof BrokerError) return { ok: false, error: error.message };

@@ -30,7 +30,7 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const { partner, leadCount, mode, preview, total, assignable } = row;
+  const { partner, leadCount, adjacentCount, mode, preview, total, assignable } = row;
   const isCpa = mode === "CPA";
   const hasLeads = leadCount > 0;
   const tooMany = leadCount > MAX_ASSIGN;
@@ -82,6 +82,8 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
         {hasLeads ? `🔥 ${plural(leadCount, "lead")} compatible${leadCount > 1 ? "s" : ""}` : "Aucun lead compatible"}
       </p>
 
+      {adjacentCount > 0 && <p className="text-xs text-sky-200">dont {plural(adjacentCount, "lead")} en zone limitrophe (score 60 %)</p>}
+
       <p className="text-xs text-slate-400">
         Niches : {partner.targetNiches.join(", ") || "—"}
         <br />
@@ -99,6 +101,11 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
                   <span className="tabular-nums">{lead.postalCode ?? "—"}</span>
                   <span className="text-slate-400"> · {lead.region ?? "—"}</span>
                   {lead.urgency && <span className="text-slate-400"> · {URGENCY_LABEL[lead.urgency] ?? lead.urgency}</span>}
+                  {lead.adjacent && (
+                    <span className="ml-2 rounded-md border border-sky-500/40 bg-sky-500/15 px-2 py-0.5 text-xs text-sky-200" title="Département voisin d'une zone couverte : à mentionner au téléphone">
+                      Zone limitrophe
+                    </span>
+                  )}
                 </span>
                 <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${QUALITY_BADGE[lead.quality].className}`}>{QUALITY_BADGE[lead.quality].label}</span>
               </li>

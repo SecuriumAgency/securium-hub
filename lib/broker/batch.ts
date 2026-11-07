@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { evaluateMatch } from "@/lib/broker/matching";
+import { evaluateMatchmaker } from "@/lib/matchmaker";
 import { cpaSaleRefusal } from "@/lib/broker/cpa-constants";
 import { calculateBatchDiscount, calculateSuggestedPrice, type LeadQuality } from "@/lib/broker/pricingEngine";
 import { prisma } from "@/lib/prisma";
@@ -45,7 +46,10 @@ export type BatchResult = { batchId: string; count: number; total: number; billi
  * - à l'unité : le prix saisi pour chaque lead, sinon le prix suggéré remisé du lot ;
  * - par lot : le prix global saisi, sinon le total suggéré remisé.
  */
-export async function createLeadBatch(input: CreateBatchInput, now = new Date()): Promise<BatchResult> {
+/** `adjacency` accepte aussi les leads d'un département limitrophe : réservé au Matchmaker. Le Lead Broker reste strict. */
+export type BatchOptions = { adjacency?: boolean };
+
+export async function createLeadBatch(input: CreateBatchInput, now = new Date(), options: BatchOptions = {}): Promise<BatchResult> {
   const ids = [...new Set(input.leadIds)];
 
   const result = await prisma.$transaction(async (tx) => {
@@ -65,7 +69,8 @@ export async function createLeadBatch(input: CreateBatchInput, now = new Date())
     });
 
     // Anti-erreur : l'artisan doit être compatible (niche et zone) avec chacun des leads du lot.
-    const incompatible = leads.filter((lead) => !evaluateMatch(lead, buyer).eligible);
+    const matchOf = options.adjacency ? evaluateMatchmaker : evaluateMatch;
+    const incompatible = leads.filter((lead) => !matchOf(lead, buyer).eligible);
     if (incompatible.length > 0) {
       throw new BrokerError(`Artisan non compatible avec ${incompatible.length} lead(s) du lot : niche ou zone non couverte.`, 400);
     }
