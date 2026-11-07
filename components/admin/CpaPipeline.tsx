@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setDealStatus, setExpectedCommission } from "@/app/admin/broker/cpa-actions";
 import { DEAL_LABELS, DEAL_STATUSES, type DealStatus } from "@/lib/broker/cpa-constants";
+import { CloseDealModal } from "@/components/broker/CloseDealModal";
 
 // Pipeline CPA : chaque lead transmis à un apporteur d'affaires, avec son étape et la commission estimée.
 // Chaque changement est enregistré tout de suite ; en cas d'échec, un message le dit et la valeur reste celle de la base.
@@ -24,6 +25,10 @@ export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  // Clôture : le lead ouvert dans le calculateur, et l'état de son enregistrement.
+  const [closing, setClosing] = useState<CpaRow | null>(null);
+  const [closingBusy, setClosingBusy] = useState(false);
+  const [closingError, setClosingError] = useState<string | null>(null);
   const [commissions, setCommissions] = useState<Record<string, string>>(() =>
     Object.fromEntries(rows.map((row) => [row.id, row.expectedCommission === null ? "" : String(row.expectedCommission)])),
   );
@@ -57,6 +62,24 @@ export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
       router.refresh();
     } else {
       setMessage({ kind: "error", text: result.error });
+    }
+  }
+
+  // Clôture : la commission calculée est enregistrée comme commission estimée. Le montant HT n'est pas stocké.
+  async function confirmClosing(commission: number) {
+    if (!closing) return;
+    const { id, name } = closing;
+    setClosingBusy(true);
+    setClosingError(null);
+    const result = await setExpectedCommission(id, commission);
+    setClosingBusy(false);
+    if (result.ok) {
+      setCommissions((current) => ({ ...current, [id]: String(commission) }));
+      setClosing(null);
+      setMessage({ kind: "ok", text: `Commission de ${euros(commission)} enregistrée pour ${name}.` });
+      router.refresh();
+    } else {
+      setClosingError(result.error);
     }
   }
 
@@ -126,6 +149,18 @@ export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
                       />
                       <span className="text-xs text-slate-400">€</span>
                     </label>
+                    <button
+                      type="button"
+                      aria-label={`Clôturer le lead ${row.name} et calculer la commission`}
+                      onClick={() => {
+                        setClosingError(null);
+                        setClosing(row);
+                      }}
+                      disabled={busy === row.id}
+                      className="mt-2 min-h-[40px] rounded-lg border border-amber-400/60 bg-amber-400/15 px-3 text-xs font-medium text-amber-200 transition-all duration-300 hover:bg-amber-400/25 focus-visible:outline-2 focus-visible:outline-amber-400 disabled:opacity-50"
+                    >
+                      Clôturer
+                    </button>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm tabular-nums text-slate-400">
                     {row.soldAt ? dateFormat.format(new Date(row.soldAt)) : "—"}
@@ -135,6 +170,18 @@ export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {closing && (
+        <CloseDealModal
+          leadName={closing.name}
+          onClose={() => {
+            if (!closingBusy) setClosing(null);
+          }}
+          onConfirm={(_montantHT, commission) => confirmClosing(commission)}
+          busy={closingBusy}
+          error={closingError}
+        />
       )}
 
       {rows.length > 0 && (

@@ -10,6 +10,10 @@ type CloseDealModalProps = {
   leadName: string;
   onClose: () => void;
   onConfirm: (montantHT: number, commission: number) => void;
+  /** Enregistrement en cours : bouton désactivé. */
+  busy?: boolean;
+  /** Erreur de l'enregistrement, affichée dans la fenêtre pour que la saisie reste en place. */
+  error?: string | null;
 };
 
 const FIELD =
@@ -26,7 +30,7 @@ function parseMontant(raw: string): number | null {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-export function CloseDealModal({ leadName, onClose, onConfirm }: CloseDealModalProps) {
+export function CloseDealModal({ leadName, onClose, onConfirm, busy = false, error = null }: CloseDealModalProps) {
   const [montant, setMontant] = useState("");
   const titleId = useId();
   const inputId = useId();
@@ -91,6 +95,12 @@ export function CloseDealModal({ leadName, onClose, onConfirm }: CloseDealModalP
             </p>
           )}
 
+          {error && (
+            <p role="alert" className="text-sm text-red-300">
+              {error}
+            </p>
+          )}
+
           <div aria-live="polite" className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
             {commission !== null && tier !== null ? (
               <>
@@ -111,10 +121,10 @@ export function CloseDealModal({ leadName, onClose, onConfirm }: CloseDealModalP
             </button>
             <button
               type="submit"
-              disabled={commission === null}
+              disabled={commission === null || busy}
               className={`${BUTTON} border-amber-400/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25`}
             >
-              Valider la clôture
+              {busy ? "Enregistrement…" : "Valider la clôture"}
             </button>
           </div>
         </form>
