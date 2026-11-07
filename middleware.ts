@@ -18,6 +18,8 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/seo-audit",
   "/api/cron/publish",
   "/api/cron/chasseur",
+  "/api/cron/prospector",
+  "/api/cron/auto-sender",
   // Fichier de vérification de domaine TikTok : TikTok le lit sans cookie. Seul ce chemin exact est ouvert.
   "/api/auth/tiktok/callback/tiktoktzmiw1sr4b9DeMjCYXNSxJ3JSimF90QZ.txt",
   // Vérification du préfixe d'URL TikTok (racine du domaine) : TikTok le lit sans cookie. Seul ce chemin exact est ouvert.
@@ -40,6 +42,8 @@ const PUBLIC_POSTS = new Set([
   "/api/chasseur/ingest",
   // Stripe appelle ce webhook sans session : la signature est vérifiée dans la route.
   "/api/webhooks/stripe",
+  // Réponses des prospects : appelée par le relais d'emails entrants, authentifiée par INBOUND_WEBHOOK_SECRET dans la route.
+  "/api/webhooks/email-reply",
 ]);
 
 export async function middleware(request: NextRequest) {

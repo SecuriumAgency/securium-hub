@@ -1,18 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasAdminSession } from "@/lib/admin-session";
-import { OUTBOUND, SENT_STATUS } from "@/lib/chasseur";
-import { MailConfigError, sendOutreachEmail } from "@/lib/mail";
-import { PipelineStatus } from "@/lib/generated/prisma/enums";
+import { MailConfigError } from "@/lib/mail";
+import { RecordError, SendError, sendDraft } from "@/lib/outreach-send";
 import { prisma } from "@/lib/prisma";
 import { isWorkingTime, OFFICE_HOURS } from "@/lib/schedule";
 
 // Identifiant cuid : rien d'autre n'atteint la base.
 const DRAFT_ID = /^[a-z0-9]{1,40}$/;
-// La transaction attend la réponse du serveur SMTP (10 à 20 s au pire, voir lib/mail.ts).
-const SEND_TRANSACTION = { maxWait: 10_000, timeout: 45_000 };
-
-// Échec de l'envoi lui-même : rien n'est parti, la transaction est annulée.
-class SendError extends Error {}
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -25,9 +19,8 @@ async function draftId(context: Context) {
 
 const notFound = () => NextResponse.json({ error: "Brouillon introuvable : déjà validé ou rejeté." }, { status: 404 });
 
-// Valider : le Hub envoie l'email en SMTP (lib/mail.ts), l'enregistre dans l'historique (OutreachMessage
-// OUTBOUND), puis le prospect passe à « Envoye », daté de maintenant, et à « Email 1 Envoyé » au Kanban : le brouillon disparaît.
-// Tout dans une transaction : si l'envoi échoue, rien n'est écrit, le brouillon reste, et la réponse 500 détaille l'erreur.
+// Valider : envoi et enregistrement par sendDraft (lib/outreach-send.ts), le même chemin que l'envoi automatique.
+// Rien n'est écrit si l'envoi échoue : le brouillon reste, et la réponse 500 détaille l'erreur.
 export async function PATCH(_request: NextRequest, context: Context) {
   const id = await draftId(context);
   if (id instanceof NextResponse) return id;
@@ -40,39 +33,9 @@ export async function PATCH(_request: NextRequest, context: Context) {
     );
   }
 
-  let emailSent = false;
   try {
-    const prospect = await prisma.$transaction(async (tx) => {
-      const draft = await tx.outreachDraft.findUnique({ where: { id }, include: { prospect: { select: { email: true } } } });
-      if (!draft) return null;
-      // Réserve le brouillon : une seconde validation simultanée attend ce verrou, puis ne trouve plus
-      // rien. Un seul envoi par brouillon.
-      const { count } = await tx.outreachDraft.deleteMany({ where: { id } });
-      if (count === 0) return null;
-      let sent: Awaited<ReturnType<typeof sendOutreachEmail>>;
-      try {
-        sent = await sendOutreachEmail({ to: draft.prospect.email, subject: draft.subject, body: draft.body });
-      } catch (error) {
-        throw new SendError(error instanceof Error ? error.message : String(error), { cause: error });
-      }
-      emailSent = true;
-      // Historique des échanges : l'email tel qu'il est parti, avec son Message-ID.
-      await tx.outreachMessage.create({
-        data: { prospectId: draft.prospectId, direction: OUTBOUND, subject: draft.subject, body: draft.body, messageId: sent.messageId || null },
-      });
-      // Colonne du Kanban : un prospect encore au début du parcours passe à « Email 1 Envoyé ». Une colonne plus
-      // avancée, posée à la main (relance, réponse, refus), reste telle quelle.
-      await tx.outreachProspect.updateMany({
-        where: { id: draft.prospectId, pipelineStatus: { in: [PipelineStatus.NOUVEAU, PipelineStatus.ICEBREAKER_GENERE] } },
-        data: { pipelineStatus: PipelineStatus.EMAIL_1_ENVOYE },
-      });
-      return tx.outreachProspect.update({
-        where: { id: draft.prospectId },
-        data: { status: SENT_STATUS, lastContactAt: new Date() },
-        select: { id: true, status: true, lastContactAt: true },
-      });
-    }, SEND_TRANSACTION);
-    return prospect ? NextResponse.json({ id, prospect }) : notFound();
+    const outcome = await sendDraft(id);
+    return outcome.status === "sent" ? NextResponse.json({ id, prospect: outcome.prospect }) : notFound();
   } catch (error) {
     if (error instanceof SendError) {
       console.error("[drafts] envoi SMTP impossible :", error.cause);
@@ -80,12 +43,12 @@ export async function PATCH(_request: NextRequest, context: Context) {
       return NextResponse.json({ error: `${reason} Brouillon conservé, rien n'est parti.`, detail: error.message }, { status: 500 });
     }
     console.error("[drafts] validation impossible :", error);
-    // L'email est parti mais l'enregistrement a échoué : le brouillon est revenu, ne pas le renvoyer.
-    if (emailSent) {
+    if (error instanceof RecordError) {
+      // L'email est parti mais l'enregistrement a échoué : le brouillon est revenu, ne pas le renvoyer.
       return NextResponse.json(
         {
           error: "Email envoyé, mais le statut n'a pas pu être enregistré : ne revalidez pas ce brouillon (double envoi), rejetez-le.",
-          detail: error instanceof Error ? error.message : String(error),
+          detail: error.message,
         },
         { status: 500 },
       );
