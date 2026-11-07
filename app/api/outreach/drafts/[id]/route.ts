@@ -39,7 +39,8 @@ export async function PATCH(_request: NextRequest, context: Context) {
   } catch (error) {
     if (error instanceof SendError) {
       console.error("[drafts] envoi SMTP impossible :", error.cause);
-      const reason = error.cause instanceof MailConfigError ? "Envoi impossible : SMTP non configuré sur le Hub." : "Envoi de l'email impossible.";
+      const reason =
+        error.cause instanceof MailConfigError ? "Envoi impossible : configuration d'envoi incomplète (SMTP, OUTREACH_FROM)." : "Envoi de l'email impossible.";
       return NextResponse.json({ error: `${reason} Brouillon conservé, rien n'est parti.`, detail: error.message }, { status: 500 });
     }
     console.error("[drafts] validation impossible :", error);

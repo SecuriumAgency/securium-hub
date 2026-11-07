@@ -64,6 +64,15 @@ export function isValidEmail(email: string) {
   return EMAIL.test(email) && email.length <= MAX_LENGTH.email;
 }
 
+// Sous-domaine dédié à la prospection : le démarchage ne part et ne reçoit les réponses que là, jamais du domaine principal.
+export const OUTREACH_DOMAIN = "outreach.securium-agency.fr";
+
+/** Vrai si l'adresse (ou « Nom <adresse> ») appartient au sous-domaine de prospection. */
+export function isOutreachAddress(address: string | null | undefined) {
+  const domain = normalizeEmail(address ?? "").split("@")[1] ?? "";
+  return domain === OUTREACH_DOMAIN;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 

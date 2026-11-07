@@ -1,15 +1,15 @@
 import { INBOUND } from "./chasseur";
 import { PipelineStatus } from "./generated/prisma/enums";
+import { isStopRequest, newContent } from "./inbound-mail";
 import { normalizeEmail } from "./outreach";
 import { prisma } from "./prisma";
 
-// Réponse d'un prospect reçue par le webhook /api/webhooks/email-reply. Une réponse enregistrée (OutreachMessage
-// INBOUND) bloque les envois suivants : la règle « a répondu » du Chasseur et l'envoi automatique la lisent.
-// Un « STOP » en début de réponse désinscrit le prospect (blocklist, statut Desinscrit), sans attendre une action à la main.
+// Réponse d'un prospect, reçue par /api/webhooks/email-reply. Une réponse enregistrée (OutreachMessage INBOUND)
+// bloque les envois suivants : la règle « a répondu » du Chasseur et l'envoi automatique la lisent.
+// - « STOP » dans le texte nouveau ou l'objet : désinscription (blocklist, statut Desinscrit, Kanban « Refus ») ;
+// - sinon : Kanban « Réponse reçue » (REPONDU). Le statut du registre, qui règle les envois, ne change pas.
 
 const MAX_BODY_CHARS = 50_000;
-
-export const isStop = (text: string) => /^\s*stop\b/i.test(text);
 
 // Repli quand la réponse n'a qu'une partie HTML : balises retirées, entités courantes décodées.
 export function htmlToText(html: string) {
@@ -37,8 +37,12 @@ export type InboundReply = {
   date?: Date | null;
 };
 
-// ignored : l'expéditeur n'est pas un prospect. already : ce Message-ID est déjà enregistré. recorded : enregistré.
-export type InboundOutcome = { status: "ignored" } | { status: "already" } | { status: "recorded"; stop: boolean };
+// ignored : l'expéditeur n'est pas un prospect. already : ce Message-ID est déjà enregistré.
+// recorded : enregistré ; `applied` dit ce qui a changé sur la fiche (« Desinscrit », « REPONDU » ou « inchangé »).
+export type InboundOutcome =
+  | { status: "ignored" }
+  | { status: "already" }
+  | { status: "recorded"; prospectId: string; stop: boolean; applied: "Desinscrit" | "REPONDU" | "inchangé" };
 
 export async function recordInboundReply(reply: InboundReply, now = new Date()): Promise<InboundOutcome> {
   const email = normalizeEmail(reply.from);
@@ -51,22 +55,28 @@ export async function recordInboundReply(reply: InboundReply, now = new Date()):
   }
 
   const subject = reply.subject?.trim() || "(sans objet)";
-  const body = clip(reply.text?.trim() || (reply.html ? htmlToText(reply.html) : "") || "(message vide)");
-  const stop = isStop(body) || isStop(subject);
+  const raw = reply.text?.trim() || (reply.html ? htmlToText(reply.html) : "");
+  const body = clip(raw || "(message vide)");
+  const stop = isStopRequest(newContent(raw), subject);
 
-  await prisma.$transaction(async (tx) => {
+  const applied = await prisma.$transaction(async (tx) => {
     await tx.outreachMessage.create({
       data: { prospectId: prospect.id, direction: INBOUND, subject, body, messageId, createdAt: reply.date ?? now },
     });
-    // Colonne du Kanban : une réponse passe la fiche à « Réponse reçue » ; un refus déjà posé reste tel quel.
-    await tx.outreachProspect.updateMany({
-      where: { id: prospect.id, pipelineStatus: { not: PipelineStatus.REFUS } },
-      data: { pipelineStatus: stop ? PipelineStatus.REFUS : PipelineStatus.REPONDU },
-    });
     if (stop) {
       await tx.outreachBlocklist.upsert({ where: { email }, create: { email }, update: {} });
-      await tx.outreachProspect.update({ where: { id: prospect.id }, data: { status: "Desinscrit" } });
+      await tx.outreachProspect.update({
+        where: { id: prospect.id },
+        data: { status: "Desinscrit", pipelineStatus: PipelineStatus.REFUS },
+      });
+      return "Desinscrit" as const;
     }
+    // Un refus déjà posé à la main reste tel quel.
+    const updated = await tx.outreachProspect.updateMany({
+      where: { id: prospect.id, pipelineStatus: { not: PipelineStatus.REFUS } },
+      data: { pipelineStatus: PipelineStatus.REPONDU },
+    });
+    return updated.count === 1 ? ("REPONDU" as const) : ("inchangé" as const);
   });
-  return { status: "recorded", stop };
+  return { status: "recorded", prospectId: prospect.id, stop, applied };
 }
