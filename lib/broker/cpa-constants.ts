@@ -18,3 +18,13 @@ export const PARTNERSHIP_LABELS: Record<PartnershipType, string> = {
   CPL: "💰 Mode CPL",
   CPA: "🤝 Apporteur d'affaires",
 };
+
+/**
+ * Refus de vente à prix pour un partenaire CPA : pas de lot, pas de session de paiement, pas de prix d'achat.
+ * Le seul chemin pour un CPA est la transmission sans prix (lib/broker/cpa.ts). Renvoie le message, ou null.
+ */
+export function cpaSaleRefusal(partnershipType: string | null | undefined): string | null {
+  return partnershipType === "CPA"
+    ? "Partenaire en mode apporteur d'affaires (CPA) : pas de vente à prix. Transmettez le lead sans prix, depuis le Lead Broker."
+    : null;
+}

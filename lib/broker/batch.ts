@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { evaluateMatch } from "@/lib/broker/matching";
+import { cpaSaleRefusal } from "@/lib/broker/cpa-constants";
 import { calculateBatchDiscount, calculateSuggestedPrice, type LeadQuality } from "@/lib/broker/pricingEngine";
 import { prisma } from "@/lib/prisma";
 
@@ -50,9 +51,12 @@ export async function createLeadBatch(input: CreateBatchInput, now = new Date())
   const result = await prisma.$transaction(async (tx) => {
     const buyer = await tx.outreachProspect.findUnique({
       where: { id: input.buyerId },
-      select: { id: true, company: true, targetNiches: true, targetZipCodes: true },
+      select: { id: true, company: true, targetNiches: true, targetZipCodes: true, partnershipType: true },
     });
     if (!buyer) throw new BrokerError("Acheteur introuvable.", 404);
+    // Un partenaire CPA ne reçoit jamais de lot à prix : aucun lot « en attente de paiement », aucune commission perdue.
+    const refusal = cpaSaleRefusal(buyer.partnershipType);
+    if (refusal) throw new BrokerError(refusal, 400);
 
     const eligible = { id: { in: ids }, status: "AVAILABLE" as const, consentToShare: true };
     const leads = await tx.capturedLead.findMany({

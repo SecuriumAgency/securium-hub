@@ -467,9 +467,12 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                 )}
               </fieldset>
 
-              <p className="text-sm text-slate-300">
-                Total : <span className="font-semibold tabular-nums text-white">{Number.isFinite(total) && total > 0 ? euros(total) : "—"}</span>
-              </p>
+              {/* Pas de total pour un partenaire CPA : le total pré-rempli reste en mémoire et serait affiché à tort. */}
+              {!isCpa && (
+                <p className="text-sm text-slate-300">
+                  Total : <span className="font-semibold tabular-nums text-white">{Number.isFinite(total) && total > 0 ? euros(total) : "—"}</span>
+                </p>
+              )}
 
               {message?.kind === "error" && (
                 <p role="alert" className="text-sm text-red-300">
@@ -482,7 +485,7 @@ export function BrokerTable({ leads }: { leads: BrokerLead[] }) {
                   Annuler
                 </button>
                 <button type="submit" disabled={busy} className={`${BUTTON} border-amber-400/60 bg-amber-400/15 text-amber-200`}>
-                  {busy ? "Enregistrement…" : isCpa ? "Transmettre au partenaire (CPA)" : "Confirmer la vente"}
+                  {busy ? "Enregistrement…" : isCpa ? "Assigner le chantier (Modèle CPA)" : "Confirmer la vente"}
                 </button>
               </div>
             </form>

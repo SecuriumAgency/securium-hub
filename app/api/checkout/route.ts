@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { evaluateMatch } from "@/lib/broker/matching";
+import { cpaSaleRefusal } from "@/lib/broker/cpa-constants";
 import { calculateSuggestedPrice } from "@/lib/broker/pricingEngine";
 import { stripeClient } from "@/lib/broker/stripe";
 import { prisma } from "@/lib/prisma";
@@ -39,9 +40,12 @@ export async function POST(request: NextRequest) {
 
     const artisan = await prisma.outreachProspect.findUnique({
       where: { id: artisanId },
-      select: { id: true, targetNiches: true, targetZipCodes: true },
+      select: { id: true, targetNiches: true, targetZipCodes: true, partnershipType: true },
     });
     if (!artisan) return NextResponse.json({ error: "Artisan introuvable." }, { status: 404 });
+    // Un partenaire CPA ne paie pas de lead : la transmission sans prix est son seul chemin.
+    const refusal = cpaSaleRefusal(artisan.partnershipType);
+    if (refusal) return NextResponse.json({ error: refusal }, { status: 400 });
 
     // Contrôle serveur anti-erreur et anti-fraude : seul un artisan compatible (niche et zone) peut payer ce lead.
     const match = evaluateMatch(lead, artisan);
