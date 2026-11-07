@@ -42,8 +42,6 @@ const PUBLIC_POSTS = new Set([
   "/api/chasseur/ingest",
   // Stripe appelle ce webhook sans session : la signature est vérifiée dans la route.
   "/api/webhooks/stripe",
-  // Réponses des prospects : appelée par le relais d'emails entrants, authentifiée par INBOUND_WEBHOOK_SECRET dans la route.
-  "/api/webhooks/email-reply",
 ]);
 
 export async function middleware(request: NextRequest) {

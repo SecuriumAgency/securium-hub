@@ -4,8 +4,8 @@ import { isStopRequest, newContent } from "./inbound-mail";
 import { normalizeEmail } from "./outreach";
 import { prisma } from "./prisma";
 
-// Réponse d'un prospect, reçue par /api/webhooks/email-reply. Une réponse enregistrée (OutreachMessage INBOUND)
-// bloque les envois suivants : la règle « a répondu » du Chasseur et l'envoi automatique la lisent.
+// Réponse d'un prospect, lue dans la boîte IMAP (lib/inbound-imap.ts). Une réponse enregistrée (OutreachMessage
+// INBOUND) bloque les envois suivants : la règle « a répondu » du Chasseur et l'envoi automatique la lisent.
 // - « STOP » dans le texte nouveau ou l'objet : désinscription (blocklist, statut Desinscrit, Kanban « Refus ») ;
 // - sinon : Kanban « Réponse reçue » (REPONDU). Le statut du registre, qui règle les envois, ne change pas.
 

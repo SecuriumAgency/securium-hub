@@ -3,10 +3,10 @@ import { isOutreachAddress, normalizeEmail, OUTREACH_DOMAIN } from "./outreach";
 
 // Envoi SMTP. Deux expéditeurs :
 // - SMTP_FROM : rapport quotidien de la flotte (scripts/fleet-daily-report.mts) ;
-// - OUTREACH_FROM : toute la prospection (validation à la main, envoi automatique), sur le sous-domaine dédié
-//   OUTREACH_DOMAIN. Sans OUTREACH_FROM valide, rien ne part : jamais de repli sur le domaine principal.
+// - OUTREACH_FROM : toute la prospection (validation à la main, envoi automatique), sur le domaine OUTREACH_DOMAIN.
+//   Sans OUTREACH_FROM valide sur ce domaine, rien ne part.
 // Variables : SMTP_HOST, SMTP_PORT (465 : TLS direct ; autre : STARTTLS exigé), SMTP_USER, SMTP_PASS, SMTP_FROM,
-// OUTREACH_FROM (« Securium Agency <hello@outreach.securium-agency.fr> » ou l'adresse seule).
+// OUTREACH_FROM (« Securium Agency <contact@securium-agency.fr> » ou l'adresse seule).
 
 const SMTP_VARIABLES = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
 

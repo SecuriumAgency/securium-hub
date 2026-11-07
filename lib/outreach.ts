@@ -64,10 +64,11 @@ export function isValidEmail(email: string) {
   return EMAIL.test(email) && email.length <= MAX_LENGTH.email;
 }
 
-// Sous-domaine dédié à la prospection : le démarchage ne part et ne reçoit les réponses que là, jamais du domaine principal.
-export const OUTREACH_DOMAIN = "outreach.securium-agency.fr";
+// Domaine d'expédition de la prospection : le domaine principal, envoyé via Resend. La réception reste sur sa boîte
+// IONOS, lue par IMAP (lib/inbound-imap.ts). Le sous-domaine dédié a été abandonné.
+export const OUTREACH_DOMAIN = "securium-agency.fr";
 
-/** Vrai si l'adresse (ou « Nom <adresse> ») appartient au sous-domaine de prospection. */
+/** Vrai si l'adresse (ou « Nom <adresse> ») est sur le domaine d'expédition de la prospection. */
 export function isOutreachAddress(address: string | null | undefined) {
   const domain = normalizeEmail(address ?? "").split("@")[1] ?? "";
   return domain === OUTREACH_DOMAIN;

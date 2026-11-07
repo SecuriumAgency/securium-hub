@@ -127,14 +127,15 @@ Sur `/admin/outreach`, le panneau « Pipeline de prospection » (`components/adm
 
 Chaque prospect a un historique d'échanges (`OutreachMessage`) : `OUTBOUND` pour un email envoyé par le Hub à la validation d'un brouillon, enregistré dans la même transaction que l'envoi ; `INBOUND` pour une réponse lue dans la boîte IMAP. Les emails antérieurs à la messagerie (registre du prospecteur) n'y figurent pas. Sur `/admin/outreach`, le bouton « Historique » de chaque prospect ouvre la conversation : plein écran sur mobile, panneau à droite à partir de `md`, vos emails à droite, ses réponses à gauche. Elle est relue toutes les 30 s tant que le panneau est ouvert (`GET /api/outreach/messages/[prospectId]`, session admin).
 
-`npx tsx scripts/agent-inbound.mts` lit la boîte `imap.ionos.fr:993` (TLS) avec `SMTP_USER` et `SMTP_PASS`, ceux de l'envoi, et examine au plus 200 emails non lus par passage. `--dry-run` compte sans rien écrire ni marquer.
+La réception ne passe plus par un webhook : le domaine principal reçoit ses réponses sur sa boîte IONOS, et `npx tsx scripts/agent-inbound.mts` (`lib/inbound-imap.ts`) la lit en IMAP (`imap.ionos.fr:993`, TLS). Identifiants : `IMAP_USER` et `IMAP_PASSWORD` ; à défaut, `SMTP_USER` et `SMTP_PASS`. `--dry-run` compte sans rien écrire ni marquer.
 
-- **Seuls les emails de prospects sont touchés** : un email dont l'expéditeur est un prospect est enregistré, puis marqué comme lu. Tous les autres restent non lus : c'est la boîte de travail de l'agence. Le contenu est lu en `BODY.PEEK`, qui ne pose aucun drapeau.
-- **Une réponse n'est enregistrée qu'une fois**, grâce à son `Message-ID`. Elle n'est marquée comme lue qu'après son enregistrement.
-- **Une réponse qui commence par « STOP » est signalée dans le journal**, à reporter dans la blocklist du prospecteur (`npm run blacklist`). Le journal ne contient ni adresse ni contenu.
-- **Un prospect qui a répondu n'est plus ciblé par l'agent Chasseur** : la suite se fait à la main.
+- **Seuls les emails de prospects sont touchés** : l'expéditeur est lu dans l'enveloppe, sans téléchargement ; seul un message d'un prospect est lu en `BODY.PEEK` (aucun drapeau), enregistré, puis marqué comme lu. Les autres restent non lus : c'est la boîte de travail de l'agence.
+- **Une réponse n'est enregistrée qu'une fois**, grâce à son `Message-ID`. Elle n'est marquée comme lue qu'après son enregistrement ; un échec la laisse pour le passage suivant.
+- **« STOP » désinscrit** : seul le texte nouveau compte (les citations, dont le pied de page de nos emails, sont exclues). Le prospect entre dans la blocklist et passe au statut `Desinscrit`, colonne « Refus ».
+- **Une autre réponse** passe la fiche à « Répondu » dans le Kanban. La réponse enregistrée arrête la relance de l'agent Chasseur et l'envoi automatique ; la suite se fait à la main.
+- **Journal** : domaine de l'expéditeur et identifiant de fiche, jamais l'adresse complète ni le contenu.
 
-Pour le faire tourner en tâche de fond sous PM2, même forme que le Chasseur, toutes les 15 minutes : `pm2 start "C:/Program Files/nodejs/node.exe" --name securium-inbound --cwd "C:/Securium-Workspace/securium-hub" --interpreter none --cron-restart "*/15 * * * *" --no-autorestart --time -- --import tsx scripts/agent-inbound.mts`.
+Tourne en tâche de fond sous PM2, toutes les 15 minutes : `pm2 start "C:/Program Files/nodejs/node.exe" --name securium-inbound --cwd "C:/Securium-Workspace/securium-hub" --interpreter none --cron-restart "*/15 * * * *" --no-autorestart --time -- --import tsx scripts/agent-inbound.mts`. **Tant que ce poste ne tourne pas, les réponses ne sont pas lues** : l'envoi automatique de 8h UTC ne voit alors pas les STOP.
 
 ### Rapport quotidien de la flotte
 
