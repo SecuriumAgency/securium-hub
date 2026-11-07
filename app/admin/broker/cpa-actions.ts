@@ -48,11 +48,16 @@ export async function setDealStatus(leadId: string, status: string): Promise<Cpa
   if (!(await hasAdminSession())) return { ok: false, error: "Session admin requise." };
   const parsed = z.object({ leadId: z.string().regex(ID), status: z.enum(DEAL_STATUSES) }).safeParse({ leadId, status });
   if (!parsed.success) return { ok: false, error: "Étape invalide." };
-  const updated = await prisma.capturedLead.updateMany({
-    where: { id: parsed.data.leadId, dealStatus: { not: null } },
-    data: { dealStatus: parsed.data.status },
-  });
-  return updated.count === 1 ? { ok: true } : { ok: false, error: "Ce lead n'est pas suivi en CPA." };
+  try {
+    const updated = await prisma.capturedLead.updateMany({
+      where: { id: parsed.data.leadId, dealStatus: { not: null } },
+      data: { dealStatus: parsed.data.status },
+    });
+    return updated.count === 1 ? { ok: true } : { ok: false, error: "Ce lead n'est pas suivi en CPA." };
+  } catch (error) {
+    console.error("[cpa] étape impossible :", error instanceof Error ? error.message : "erreur inconnue");
+    return { ok: false, error: "Enregistrement impossible." };
+  }
 }
 
 /** Commission estimée pour un lead CPA, en euros. Vide pour l'effacer. */
@@ -62,9 +67,14 @@ export async function setExpectedCommission(leadId: string, amount: number | nul
     .object({ leadId: z.string().regex(ID), amount: z.number().min(0).max(1_000_000).nullable() })
     .safeParse({ leadId, amount });
   if (!parsed.success) return { ok: false, error: "Montant invalide." };
-  const updated = await prisma.capturedLead.updateMany({
-    where: { id: parsed.data.leadId, dealStatus: { not: null } },
-    data: { expectedCommission: parsed.data.amount },
-  });
-  return updated.count === 1 ? { ok: true } : { ok: false, error: "Ce lead n'est pas suivi en CPA." };
+  try {
+    const updated = await prisma.capturedLead.updateMany({
+      where: { id: parsed.data.leadId, dealStatus: { not: null } },
+      data: { expectedCommission: parsed.data.amount },
+    });
+    return updated.count === 1 ? { ok: true } : { ok: false, error: "Ce lead n'est pas suivi en CPA." };
+  } catch (error) {
+    console.error("[cpa] commission impossible :", error instanceof Error ? error.message : "erreur inconnue");
+    return { ok: false, error: "Enregistrement impossible." };
+  }
 }

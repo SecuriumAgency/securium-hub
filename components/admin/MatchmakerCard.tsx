@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { assignLeadsToPartner } from "@/app/admin/broker/matchmaker/actions";
+import { Toast, type ToastState } from "@/components/admin/Toast";
 import { PARTNERSHIP_LABELS, type PartnershipType } from "@/lib/broker/cpa-constants";
 import type { LeadQuality } from "@/lib/broker/pricingEngine";
 import { MAX_ASSIGN, type MatchmakerRow } from "@/lib/matchmaker";
@@ -28,37 +29,37 @@ const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? "
 export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  // La transition garde l'interface réactive pendant l'assignation ; le bouton reste désactivé le temps de l'appel.
+  const [pending, startTransition] = useTransition();
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
   const { partner, leadCount, adjacentCount, mode, preview, total, assignable } = row;
   const isCpa = mode === "CPA";
   const hasLeads = leadCount > 0;
   const tooMany = leadCount > MAX_ASSIGN;
   const badgeKey = (partner.partnershipType in PARTNERSHIP_LABELS ? partner.partnershipType : "CPL") as PartnershipType;
 
-  async function confirm() {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const result = await assignLeadsToPartner(partner.id, row.leadIds);
-      if (!result.ok) {
-        setMessage({ kind: "error", text: result.error });
-        return;
+  function confirm() {
+    startTransition(async () => {
+      try {
+        const result = await assignLeadsToPartner(partner.id, row.leadIds);
+        if (!result.ok) {
+          setToast({ kind: "error", text: result.error });
+          return;
+        }
+        setConfirming(false);
+        setToast({
+          kind: "ok",
+          text:
+            result.mode === "CPA"
+              ? `${plural(result.count, "lead")} transmis à ${partner.company} (CPA, 0 €). Commission à suivre dans Ventes.`
+              : `Lot créé : ${euros(result.total)}. ${result.billing === "stripe_pending" ? "Paiement Stripe à brancher." : "Facturation manuelle."}`,
+        });
+        router.refresh();
+      } catch {
+        setToast({ kind: "error", text: "Connexion impossible. Réessayez." });
       }
-      setConfirming(false);
-      setMessage({
-        kind: "ok",
-        text:
-          result.mode === "CPA"
-            ? `${plural(result.count, "lead")} transmis à ${partner.company} (CPA, 0 €). Commission à suivre dans Ventes.`
-            : `Lot créé : ${euros(result.total)}. ${result.billing === "stripe_pending" ? "Paiement Stripe à brancher." : "Facturation manuelle."}`,
-      });
-      router.refresh();
-    } catch {
-      setMessage({ kind: "error", text: "Connexion impossible. Réessayez." });
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -81,7 +82,6 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
       <p className={`text-2xl font-semibold tabular-nums ${hasLeads ? "text-emerald-300" : "text-slate-500"}`}>
         {hasLeads ? `🔥 ${plural(leadCount, "lead")} compatible${leadCount > 1 ? "s" : ""}` : "Aucun lead compatible"}
       </p>
-
       {adjacentCount > 0 && <p className="text-xs text-sky-200">dont {plural(adjacentCount, "lead")} en zone limitrophe (score 60 %)</p>}
 
       <p className="text-xs text-slate-400">
@@ -122,14 +122,8 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
       )}
 
       <div className="mt-auto flex flex-col gap-3">
-        {message && (
-          <p role={message.kind === "error" ? "alert" : "status"} className={`text-sm ${message.kind === "error" ? "text-red-300" : "text-emerald-300"}`}>
-            {message.text}
-          </p>
-        )}
-
         {confirming ? (
-          <div role="region" aria-label="Confirmer l'assignation" className="flex flex-col gap-3 rounded-xl border border-amber-400/40 bg-slate-900/80 p-3">
+          <div role="region" aria-label="Confirmer l'assignation" aria-busy={pending} className="flex flex-col gap-3 rounded-xl border border-amber-400/40 bg-slate-900/80 p-3">
             {isCpa ? (
               <p className="text-sm text-slate-200">
                 Transmettre {plural(leadCount, "lead")} à <span className="font-semibold text-white">{partner.company}</span>, sans prix : facturation 0 €.
@@ -141,11 +135,11 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
               </p>
             )}
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setConfirming(false)} disabled={busy} className={CANCEL_BUTTON}>
+              <button type="button" onClick={() => setConfirming(false)} disabled={pending} className={CANCEL_BUTTON}>
                 Annuler
               </button>
-              <button type="button" onClick={confirm} disabled={busy} className={ASSIGN_BUTTON}>
-                {busy ? "Enregistrement…" : "Confirmer"}
+              <button type="button" onClick={confirm} disabled={pending} className={ASSIGN_BUTTON}>
+                {pending ? "Enregistrement…" : "Confirmer"}
               </button>
             </div>
           </div>
@@ -153,7 +147,7 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
           <button
             type="button"
             onClick={() => {
-              setMessage(null);
+              setToast(null);
               setConfirming(true);
             }}
             disabled={!hasLeads || !assignable}
@@ -163,6 +157,8 @@ export function MatchmakerCard({ row }: { row: MatchmakerRow }) {
           </button>
         )}
       </div>
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </article>
   );
 }

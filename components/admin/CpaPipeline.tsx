@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setDealStatus, setExpectedCommission } from "@/app/admin/broker/cpa-actions";
-import { DEAL_LABELS, DEAL_STATUSES, type DealStatus } from "@/lib/broker/cpa-constants";
+import { Toast, type ToastState } from "@/components/admin/Toast";
 import { CloseDealModal } from "@/components/broker/CloseDealModal";
+import { DEAL_LABELS, DEAL_STATUSES, type DealStatus } from "@/lib/broker/cpa-constants";
 
 // Pipeline CPA : chaque lead transmis à un apporteur d'affaires, avec son étape et la commission estimée.
-// Chaque changement est enregistré tout de suite ; en cas d'échec, un message le dit et la valeur reste celle de la base.
+// Chaque changement est enregistré tout de suite ; un message le confirme ou dit l'erreur, et la valeur reste celle de la base.
 export type CpaRow = {
   id: string;
   name: string;
@@ -20,67 +21,88 @@ export type CpaRow = {
 
 const dateFormat = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short" });
 const euros = (value: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+const NETWORK_ERROR = "Connexion impossible. Réessayez.";
 
 export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
   const router = useRouter();
+  // Transitions : les appels aux Server Actions ne bloquent pas l'interface. `busy` désigne la seule ligne en cours.
+  const [, startStatusTransition] = useTransition();
+  const [, startCommissionTransition] = useTransition();
+  const [closingPending, startClosingTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  // Clôture : le lead ouvert dans le calculateur, et l'état de son enregistrement.
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
+  // Clôture : le lead ouvert dans le calculateur, et l'erreur de son enregistrement.
   const [closing, setClosing] = useState<CpaRow | null>(null);
-  const [closingBusy, setClosingBusy] = useState(false);
   const [closingError, setClosingError] = useState<string | null>(null);
   const [commissions, setCommissions] = useState<Record<string, string>>(() =>
     Object.fromEntries(rows.map((row) => [row.id, row.expectedCommission === null ? "" : String(row.expectedCommission)])),
   );
 
-  async function changeStatus(id: string, status: DealStatus) {
-    setBusy(id);
-    setMessage(null);
-    const result = await setDealStatus(id, status);
-    setBusy(null);
-    if (result.ok) {
-      setMessage({ kind: "ok", text: `Étape mise à jour : ${DEAL_LABELS[status]}.` });
-      router.refresh();
-    } else {
-      setMessage({ kind: "error", text: result.error });
-    }
+  function changeStatus(id: string, status: DealStatus) {
+    startStatusTransition(async () => {
+      setBusy(id);
+      try {
+        const result = await setDealStatus(id, status);
+        if (result.ok) {
+          setToast({ kind: "ok", text: `Étape mise à jour : ${DEAL_LABELS[status]}.` });
+          router.refresh();
+        } else {
+          setToast({ kind: "error", text: result.error });
+        }
+      } catch {
+        setToast({ kind: "error", text: NETWORK_ERROR });
+      } finally {
+        setBusy(null);
+      }
+    });
   }
 
-  async function saveCommission(id: string) {
+  function saveCommission(id: string) {
     const raw = (commissions[id] ?? "").trim();
     const amount = raw === "" ? null : Number(raw.replace(",", "."));
     if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
-      setMessage({ kind: "error", text: "Montant invalide : un nombre positif, en euros." });
+      setToast({ kind: "error", text: "Montant invalide : un nombre positif, en euros." });
       return;
     }
-    setBusy(id);
-    setMessage(null);
-    const result = await setExpectedCommission(id, amount);
-    setBusy(null);
-    if (result.ok) {
-      setMessage({ kind: "ok", text: "Commission estimée enregistrée." });
-      router.refresh();
-    } else {
-      setMessage({ kind: "error", text: result.error });
-    }
+    startCommissionTransition(async () => {
+      setBusy(id);
+      try {
+        const result = await setExpectedCommission(id, amount);
+        if (result.ok) {
+          setToast({ kind: "ok", text: "Commission estimée enregistrée." });
+          router.refresh();
+        } else {
+          setToast({ kind: "error", text: result.error });
+        }
+      } catch {
+        setToast({ kind: "error", text: NETWORK_ERROR });
+      } finally {
+        setBusy(null);
+      }
+    });
   }
 
   // Clôture : la commission calculée est enregistrée comme commission estimée. Le montant HT n'est pas stocké.
-  async function confirmClosing(commission: number) {
+  function confirmClosing(commission: number) {
     if (!closing) return;
     const { id, name } = closing;
-    setClosingBusy(true);
     setClosingError(null);
-    const result = await setExpectedCommission(id, commission);
-    setClosingBusy(false);
-    if (result.ok) {
-      setCommissions((current) => ({ ...current, [id]: String(commission) }));
-      setClosing(null);
-      setMessage({ kind: "ok", text: `Commission de ${euros(commission)} enregistrée pour ${name}.` });
-      router.refresh();
-    } else {
-      setClosingError(result.error);
-    }
+    startClosingTransition(async () => {
+      try {
+        const result = await setExpectedCommission(id, commission);
+        if (result.ok) {
+          setCommissions((current) => ({ ...current, [id]: String(commission) }));
+          setClosing(null);
+          setToast({ kind: "ok", text: `Commission de ${euros(commission)} enregistrée pour ${name}.` });
+          router.refresh();
+        } else {
+          setClosingError(result.error);
+        }
+      } catch {
+        setClosingError(NETWORK_ERROR);
+      }
+    });
   }
 
   return (
@@ -93,12 +115,6 @@ export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
           {rows.length} lead{rows.length > 1 ? "s" : ""} transmis à un apporteur d&apos;affaires. Suivez l&apos;étape et la commission estimée.
         </p>
       </div>
-
-      {message && (
-        <p role={message.kind === "error" ? "alert" : "status"} className={`rounded-xl border px-4 py-3 text-sm ${message.kind === "error" ? "border-red-400/40 bg-red-500/10 text-red-200" : "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"}`}>
-          {message.text}
-        </p>
-      )}
 
       {rows.length === 0 ? (
         <p className="text-sm text-slate-400">Aucun lead transmis à un partenaire CPA pour l&apos;instant.</p>
@@ -176,10 +192,10 @@ export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
         <CloseDealModal
           leadName={closing.name}
           onClose={() => {
-            if (!closingBusy) setClosing(null);
+            if (!closingPending) setClosing(null);
           }}
           onConfirm={(_montantHT, commission) => confirmClosing(commission)}
-          busy={closingBusy}
+          busy={closingPending}
           error={closingError}
         />
       )}
@@ -189,6 +205,8 @@ export function CpaPipeline({ rows }: { rows: CpaRow[] }) {
           Estimation indicative : {euros(rows.reduce((total, row) => total + (row.expectedCommission ?? 0), 0))} de commissions estimées sur ces leads.
         </p>
       )}
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </section>
   );
 }
