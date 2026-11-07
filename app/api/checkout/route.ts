@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { evaluateMatch } from "@/lib/broker/matching";
 import { cpaSaleRefusal } from "@/lib/broker/cpa-constants";
 import { calculateSuggestedPrice } from "@/lib/broker/pricingEngine";
 import { stripeClient } from "@/lib/broker/stripe";
 import { prisma } from "@/lib/prisma";
+import { evaluateMatchmaker } from "@/lib/matchmaker";
 
 // Session Stripe Checkout pour un lead : prix suggéré, identifiants du lead et de l'artisan dans les métadonnées.
 // Réservé à la session admin (middleware) : c'est l'administrateur qui envoie le lien à l'artisan.
@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     const refusal = cpaSaleRefusal(artisan.partnershipType);
     if (refusal) return NextResponse.json({ error: refusal }, { status: 400 });
 
-    // Contrôle serveur anti-erreur et anti-fraude : seul un artisan compatible (niche et zone) peut payer ce lead.
-    const match = evaluateMatch(lead, artisan);
+    // Contrôle serveur anti-erreur et anti-fraude : seul un artisan compatible (niche, zone ou zone limitrophe) peut payer ce lead.
+    const match = evaluateMatchmaker(lead, artisan);
     if (!match.eligible) {
       return NextResponse.json({ error: `Artisan non compatible avec ce lead : ${match.label}.` }, { status: 400 });
     }
