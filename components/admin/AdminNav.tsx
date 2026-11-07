@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Box, CalendarDays, Clapperboard, ExternalLink, FileText, FlaskConical, Factory, Globe, Image as ImageIcon, Layers, LayoutDashboard, Menu, Monitor, Search, Target, Video, X, type LucideIcon } from "lucide-react";
+import { Bot, Box, CalendarDays, Clapperboard, ExternalLink, FileText, FlaskConical, Factory, Globe, Image as ImageIcon, Layers, LayoutDashboard, Menu, Monitor, Search, Target, Users, Video, X, type LucideIcon } from "lucide-react";
 import { useOverlay } from "./use-overlay";
 
 // Une entrée sans `href` n'a pas encore de page : elle s'affiche avec la mention « Bientôt », sans lien.
@@ -24,6 +24,7 @@ const LINKS: NavItem[] = [
   { href: "/admin/iafluencer", label: "IAfluencer", icon: Video },
   { href: "/admin/image-studio", label: "Images locales", icon: ImageIcon },
   { href: "/admin/broker", label: "Lead Broker", icon: Target },
+  { href: "/admin/broker/matchmaker", label: "Matchmaker", icon: Users },
   { href: "/admin/osint", label: "OSINT", icon: Globe },
   { href: "/admin/ecosystem", label: "Écosystème", icon: Layers },
   { href: "https://www.securium-labs.app", label: "Labs", icon: FlaskConical, external: true },
