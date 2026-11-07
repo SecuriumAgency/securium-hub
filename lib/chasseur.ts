@@ -172,7 +172,6 @@ export function prospectContext(prospect: ProspectFacts) {
 
 // hasReplied : au moins une réponse enregistrée (OutreachMessage INBOUND, lue par scripts/agent-inbound.mts).
 // activity et targetNiches : métier du registre et niches du broker, pour écarter les métiers de la toiture.
-// source : origine du prospect, pour le passage direct des prescripteurs importés (isImportedPrescriber).
 type Eligibility = {
   email: string;
   status: string;
@@ -181,7 +180,6 @@ type Eligibility = {
   hasReplied: boolean;
   activity: string | null;
   targetNiches: string[];
-  source?: string | null;
 };
 
 // Métiers de la toiture (couvreur, couverture, toiture, zinguerie), par le métier du registre ou par la niche du broker.
@@ -210,13 +208,15 @@ export function isOutOfPrescriberScope(prospect: { activity: string | null }) {
   return activity !== "" && !isPrescriberActivity(activity);
 }
 
-// Source des prospects ajoutés par scripts/import-prescribers.mts (lib/prescribers-import.ts).
+// Source des prospects ajoutés par scripts/import-prescribers.mts (lib/prescribers-import.ts). Trace seulement : le
+// passage direct au Chasseur ne dépend pas de la source, il dépend du métier.
 export const PRESCRIBER_SOURCE = "import-prescripteurs";
 
-// Prescripteur importé avec un métier de prescripteur. Il reste en statut « Nouveau », qui dit vrai : aucun email
-// n'a été envoyé. L'icebreaker l'ignore, et le Chasseur lui rédige le premier email, en brouillon.
-export function isImportedPrescriber(prospect: { source?: string | null; activity: string | null }) {
-  return prospect.source === PRESCRIBER_SOURCE && isPrescriberActivity(prospect.activity);
+// Prescripteur jamais contacté (statut « Nouveau ») : il passe directement au Chasseur, qui lui rédige le premier
+// email, en brouillon. Il reste « Nouveau », ce qui dit vrai : aucun email n'a été envoyé. L'icebreaker l'ignore.
+// Vaut pour tout le registre, importé ou non.
+export function isPrescriberFirstContact(prospect: { activity: string | null }) {
+  return isPrescriberActivity(prospect.activity);
 }
 
 // Raison pour laquelle un prospect ne peut pas être ciblé, ou null s'il peut l'être.
@@ -225,8 +225,8 @@ export function exclusionReason(prospect: Eligibility, blocklist: ReadonlySet<st
   if (isExcludedStatus(prospect.status)) return "statut exclu";
   if (isRoofingTrade(prospect)) return "métier hors cible";
   if (isOutOfPrescriberScope(prospect)) return "métier hors cible";
-  // Jamais contacté : un premier contact relève de l'icebreaker, sauf pour un prescripteur importé (passage direct).
-  if (prospect.status === NEW_STATUS && !isImportedPrescriber(prospect)) return "jamais contacté";
+  // Jamais contacté : un premier contact relève de l'icebreaker, sauf pour un prescripteur (passage direct au Chasseur).
+  if (prospect.status === NEW_STATUS && !isPrescriberFirstContact(prospect)) return "jamais contacté";
   // Il a répondu (peut-être « STOP ») : la suite se fait à la main, jamais par une relance automatique.
   if (prospect.hasReplied) return "a répondu";
   if (prospect.hasDraft || prospect.status === DRAFT_STATUS) return "brouillon en attente";

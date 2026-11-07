@@ -62,7 +62,7 @@ export type Plan = { creates: Creation[]; completions: Completion[]; unchanged: 
  * et ne pas être de la toiture ; un désinscrit ou une adresse en blocklist n'est jamais touché.
  * Un prescripteur déjà en base n'a pas son statut modifié : seuls ses champs vides sont complétés.
  * Un nouveau prescripteur entre en statut « Nouveau », sans historique de contact : c'est vrai, il n'a jamais été
- * contacté. L'icebreaker l'ignore (lib/outreach-ai.ts) et le Chasseur lui rédige le premier email (isImportedPrescriber).
+ * contacté. L'icebreaker l'ignore (lib/outreach-ai.ts) et le Chasseur lui rédige le premier email (isPrescriberFirstContact).
  */
 export function planImport(rows: Record<string, string>[], headers: string[], ctx: PlanContext): Plan {
   const plan: Plan = { creates: [], completions: [], unchanged: 0, rejections: [], addressIgnored: headers.includes("address") && rows.some((row) => (row.address ?? "") !== "") };

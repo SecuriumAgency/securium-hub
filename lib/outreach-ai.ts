@@ -1,10 +1,10 @@
 // Icebreaker : premier email d'un prospect importé par CSV (statut Nouveau), rédigé par Claude à partir de son
 // secteur d'activité et de sa ville (scripts/agent-icebreakers.mts). Le Chasseur relance des prospects déjà
-// contactés, et écrit aussi le premier email des prescripteurs importés (isImportedPrescriber) : ceux-là n'ont
+// contactés, et écrit aussi le premier email des prescripteurs (isPrescriberFirstContact) : ceux-là n'ont
 // pas d'icebreaker. Ici le prospect n'a jamais été démarché, et l'email doit se lire comme un premier contact.
 // Rien ne part : le brouillon attend la validation humaine sur /admin/outreach.
 import type Anthropic from "@anthropic-ai/sdk";
-import { DRAFT_SCHEMA, draftErrors, isImportedPrescriber, PUBLIC_MAIL_DOMAINS, SENDER, type AgentBrief } from "./chasseur";
+import { DRAFT_SCHEMA, draftErrors, isPrescriberFirstContact, PUBLIC_MAIL_DOMAINS, SENDER, type AgentBrief } from "./chasseur";
 import { isExcludedStatus, NEW_STATUS } from "./outreach";
 
 const MAX_TOKENS = 4_000;
@@ -17,7 +17,6 @@ export type IcebreakerTarget = {
   activity: string | null;
   status: string;
   hasDraft: boolean;
-  source?: string | null;
 };
 
 // Consigne de l'agent, même structure que segmentSystemPrompt (lib/ai/chasseur-generator.ts) : le brief dit
@@ -56,12 +55,12 @@ export function icebreakerContext(prospect: Pick<IcebreakerTarget, "company" | "
 
 // Raison pour laquelle un prospect ne reçoit pas d'icebreaker, ou null. Premier contact : il doit être Nouveau,
 // sans brouillon, hors blocklist, et connu au moins par son secteur ou sa ville, pour que l'accroche le soit.
-// Un prescripteur importé passe directement au Chasseur : il n'a pas d'icebreaker.
+// Un prescripteur passe directement au Chasseur : il n'a pas d'icebreaker.
 export function icebreakerExclusion(prospect: IcebreakerTarget, blocklist: ReadonlySet<string>) {
   if (blocklist.has(prospect.email)) return "blocklist";
   if (isExcludedStatus(prospect.status)) return "statut exclu";
   if (prospect.status !== NEW_STATUS) return "déjà contacté";
-  if (isImportedPrescriber(prospect)) return "prescripteur importé : passe au Chasseur";
+  if (isPrescriberFirstContact(prospect)) return "prescripteur : passe au Chasseur";
   if (prospect.hasDraft) return "brouillon en attente";
   if (!prospect.activity && !prospect.city) return "secteur et ville inconnus";
   return null;
