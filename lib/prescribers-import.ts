@@ -45,7 +45,8 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
 }
 
 export type ExistingProspect = { id: string; status: string; company: string; phone: string | null; city: string | null; activity: string | null };
-export type PlanContext = { blocklist: ReadonlySet<string>; existing: ReadonlyMap<string, ExistingProspect>; now: Date };
+// source : origine tracée sur les créations. Par défaut, l'import CSV des prescripteurs (PRESCRIBER_SOURCE).
+export type PlanContext = { blocklist: ReadonlySet<string>; existing: ReadonlyMap<string, ExistingProspect>; now: Date; source?: string };
 
 export type Creation = {
   line: number;
@@ -104,7 +105,7 @@ export function planImport(rows: Record<string, string>[], headers: string[], ct
       line,
       company,
       activity: metier,
-      data: { company, email, phone, city, activity: metier, status: NEW_STATUS, source: PRESCRIBER_SOURCE, createdAt: ctx.now, lastContactAt: ctx.now },
+      data: { company, email, phone, city, activity: metier, status: NEW_STATUS, source: ctx.source ?? PRESCRIBER_SOURCE, createdAt: ctx.now, lastContactAt: ctx.now },
     });
   });
 
