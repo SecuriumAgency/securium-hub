@@ -19,9 +19,26 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Adresse de production du hub : base des URL absolues (Open Graph, canonical).
+const HUB_URL = "https://hub.securium-agency.fr";
+const DESCRIPTION = "Centre de commandement 3D de Securium Agency : flotte de sites, leads et agents.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(HUB_URL),
   title: "Securium Core",
-  description: "Centre de commandement 3D de Securium Agency : flotte de sites, leads et agents.",
+  description: DESCRIPTION,
+  openGraph: {
+    type: "website",
+    locale: "fr_FR",
+    siteName: "Securium Core",
+    title: "Securium Core",
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary",
+    title: "Securium Core",
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

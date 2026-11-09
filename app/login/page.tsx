@@ -1,16 +1,21 @@
 import type { Metadata } from "next";
 import { LockKeyhole } from "lucide-react";
+import { OrganizationJsonLd } from "@/components/seo/OrganizationJsonLd";
 import { LoginForm } from "./LoginForm";
 
+// Seule page du hub indexable (voir robots.ts et sitemap.ts) : elle porte son URL canonique et les données
+// structurées de l'agence.
 export const metadata: Metadata = {
   title: "Connexion au hub Securium · QG de l’agence",
   description:
     "Accès réservé à l’équipe Securium Agency : flotte de sites, leads et agents, depuis le centre de commandement 3D du hub.",
+  alternates: { canonical: "/login" },
 };
 
 export default function LoginPage() {
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#05070d] px-4">
+      <OrganizationJsonLd />
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-1/2 size-[36rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-500/10 blur-3xl"

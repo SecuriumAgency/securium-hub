@@ -22,16 +22,21 @@ const statusDot: Record<SiteStatus, string> = {
   unknown: "bg-slate-400",
 };
 
+// Orange : une tâche en attente de l'Orchestrateur (alerte SEO, dev, sécurité ou UI) sur ce site.
+const ALERT_COLOR = "#fb923c";
+
 type SiteNodeProps = {
   site: Site;
   selected: boolean;
+  // Vrai si l'Orchestrateur a une tâche en attente pour ce site (voir useAgentAlerts).
+  alert: boolean;
   onSelect: (id: string) => void;
   portal: RefObject<HTMLElement>;
 };
 
 // Mémoïsé : à chaque rafraîchissement de la flotte, seuls les bâtiments dont le site a changé
 // se re-rendent (useFleet conserve la référence des sites inchangés, onSelect et portal sont stables).
-export const SiteNode = memo(function SiteNode({ site, selected, onSelect, portal }: SiteNodeProps) {
+export const SiteNode = memo(function SiteNode({ site, selected, alert, onSelect, portal }: SiteNodeProps) {
   const [hovered, setHovered] = useState(false);
   const lift = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
@@ -75,7 +80,7 @@ export const SiteNode = memo(function SiteNode({ site, selected, onSelect, porta
       <mesh position={[0, 0.04, 0]} receiveShadow>
         <boxGeometry args={[plot, 0.08, plot]} />
         <meshStandardMaterial color="#0f172a" roughness={0.8} />
-        <Edges color={accent} lineWidth={1} transparent opacity={active ? 0.9 : 0.3} />
+        <Edges color={alert ? ALERT_COLOR : accent} lineWidth={1} transparent opacity={active ? 0.9 : 0.3} />
       </mesh>
 
       {isHq && <FeedPulse plot={plot} />}
@@ -121,7 +126,7 @@ export const SiteNode = memo(function SiteNode({ site, selected, onSelect, porta
             {isHq ? (
               <Crown aria-hidden className="size-3 text-amber-300" />
             ) : (
-              <span aria-hidden className={`size-1.5 rounded-full ${statusDot[site.status]}`} />
+              <span aria-hidden className={`size-1.5 rounded-full ${alert ? "bg-orange-400" : statusDot[site.status]}`} />
             )}
             {site.name}
           </button>
