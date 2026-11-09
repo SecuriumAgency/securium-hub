@@ -21,6 +21,7 @@ import { DioramaIsland } from "./DioramaIsland";
 import { IdleBreathing } from "./animations/IdleBreathing";
 import type { BreathingOptions } from "./animations/useIdleBreathing";
 import { TrafficController } from "./animations/TrafficController";
+import { CityEnvironment } from "./CityEnvironment";
 import { GRID_MAP, type AnimalModel, type BuildingModel, type CharacterModel, type Placement, type ShopModel, type Vec3 } from "./hubGrid";
 
 type GroupProps = ComponentProps<"group">;
@@ -265,7 +266,7 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
       <color attach="background" args={[light.background]} />
       <ambientLight color={light.ambient} intensity={light.ambientIntensity} />
       <directionalLight
-        position={[15, 25, 15]}
+        position={[10, 20, 10]}
         color={light.sun}
         castShadow
         intensity={light.sunIntensity}
@@ -278,8 +279,15 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
       />
       <EnvironmentLight timeOfDay={timeOfDay} hdri={hdri} />
 
+      {/* Sol vert autour de l'îlot : sous la face supérieure du socle (y = 0), il n'apparaît qu'en bordure. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+        <planeGeometry args={[150, 150]} />
+        <meshStandardMaterial color="#4ade80" />
+      </mesh>
+
       <DioramaIsland />
       <Diorama onOpen={open} />
+      <CityEnvironment />
 
       {/* Ombres de contact posées sur la face supérieure du socle, à la taille de sa plus grande dimension. */}
       <ContactShadows position={[0, 0.002, 0]} scale={GRID_MAP.socle.width} resolution={1024} blur={2} opacity={0.5} far={2} />
