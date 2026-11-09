@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentProps, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls, useCursor } from "@react-three/drei";
 import { MathUtils, type Group } from "three";
@@ -20,7 +21,7 @@ import { DioramaIsland } from "./DioramaIsland";
 import { IdleBreathing } from "./animations/IdleBreathing";
 import type { BreathingOptions } from "./animations/useIdleBreathing";
 import { TrafficController } from "./animations/TrafficController";
-import { GRID_MAP, type AnimalModel, type BuildingModel, type BuildingPlacement, type CharacterModel, type Placement, type ShopModel } from "./hubGrid";
+import { GRID_MAP, type AnimalModel, type BuildingModel, type CharacterModel, type Placement, type ShopModel, type Vec3 } from "./hubGrid";
 
 type GroupProps = ComponentProps<"group">;
 type OrbitLike = { target: { set: (x: number, y: number, z: number) => void }; update: () => void };
@@ -51,9 +52,25 @@ function EnvironmentLight({ timeOfDay, hdri }: { timeOfDay: TimeOfDay; hdri: boo
   return <hemisphereLight color={light.sky} groundColor={light.ground} intensity={light.hemisphere} />;
 }
 
-// Une construction commerciale, mise en avant au survol : +5 % d'échelle, curseur pointeur, bâtiment mis à jour dans le store.
-function HoverBuilding({ placement }: { placement: BuildingPlacement }) {
-  const Model = BUILDING_MODELS[placement.model];
+type OpenHandler = (href: string) => void;
+
+// Bâtiment commercial interactif. Au survol : curseur pointeur, identifiant dans le store (infobulle de l'overlay),
+// +5 % d'échelle. Au clic : navigation vers la page d'administration liée. Le pivot est le centre de l'ensemble.
+function Interactive({
+  id,
+  href,
+  position,
+  rotation,
+  onOpen,
+  children,
+}: {
+  id: string;
+  href: string;
+  position: Vec3;
+  rotation: number;
+  onOpen: OpenHandler;
+  children: ReactNode;
+}) {
   const ref = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const setActiveNode = useHubStore((state) => state.setActiveNode);
@@ -68,17 +85,21 @@ function HoverBuilding({ placement }: { placement: BuildingPlacement }) {
   const handlePointerOver = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     setHovered(true);
-    setActiveNode(placement.id);
+    setActiveNode(id);
   };
   const handlePointerOut = () => {
     setHovered(false);
     setActiveNode(null);
   };
+  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
+    onOpen(href);
+  };
 
   return (
-    <group position={[placement.x, 0, placement.z]} rotation={[0, placement.rotation, 0]}>
-      <group ref={ref} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut}>
-        <Model />
+    <group position={position} rotation={[0, rotation, 0]}>
+      <group ref={ref} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick}>
+        {children}
       </group>
     </group>
   );
@@ -117,19 +138,41 @@ function Figurant({
 }
 
 // Diorama posé sur le socle : routes, rangées de bâtiments, boutique, trottoirs, coin parc et taxi.
-function Diorama() {
+function Diorama({ onOpen }: { onOpen: OpenHandler }) {
+  const [shopX, shopY, shopZ] = GRID_MAP.shopSite.center;
   return (
     <group>
       <Roads />
 
-      {GRID_MAP.buildings.map((building) => (
-        <HoverBuilding key={building.id} placement={building} />
-      ))}
-
-      {GRID_MAP.shop.map((item) => {
-        const Model = SHOP_MODELS[item.model];
-        return <Model key={item.id} position={[item.x, 0, item.z]} rotation={[0, item.rotation, 0]} />;
+      {GRID_MAP.buildings.map((building) => {
+        const Model = BUILDING_MODELS[building.model];
+        return (
+          <Interactive
+            key={building.id}
+            id={building.id}
+            href={building.href}
+            position={[building.x, 0, building.z]}
+            rotation={building.rotation}
+            onOpen={onOpen}
+          >
+            <Model />
+          </Interactive>
+        );
       })}
+
+      {/* Mini Shop : sol, vitrine et frigo forment un seul bâtiment, pivoté autour de son centre. */}
+      <Interactive
+        id={GRID_MAP.shopSite.id}
+        href={GRID_MAP.shopSite.href}
+        position={[shopX, shopY, shopZ]}
+        rotation={0}
+        onOpen={onOpen}
+      >
+        {GRID_MAP.shop.map((item) => {
+          const Model = SHOP_MODELS[item.model];
+          return <Model key={item.id} position={[item.x - shopX, 0, item.z - shopZ]} rotation={[0, item.rotation, 0]} />;
+        })}
+      </Interactive>
 
       {GRID_MAP.characters.map((character, index) => (
         <Figurant
@@ -172,10 +215,13 @@ function ViewReset() {
 }
 
 // Scène du hub : éclairage selon l'heure, socle ardoise, diorama sur le plan et contrôles de caméra.
+// useRouter est appelé ici, dans l'arbre React du DOM : le Canvas R3F est un rendu séparé, qui n'a pas accès au contexte du routeur.
 export function HubScene({ hdri = false }: { hdri?: boolean }) {
   const timeOfDay = useHubStore((state) => state.timeOfDay);
+  const router = useRouter();
   const light = LIGHTS[timeOfDay];
   const { position, fov } = GRID_MAP.camera;
+  const open: OpenHandler = (href) => router.push(href);
 
   // shadows="percentage" : PCFSoftShadowMap a été retiré de three r186 (avertissement en console).
   return (
@@ -197,7 +243,7 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
       <EnvironmentLight timeOfDay={timeOfDay} hdri={hdri} />
 
       <DioramaIsland />
-      <Diorama />
+      <Diorama onOpen={open} />
 
       {/* Ombres de contact posées sur la face supérieure du socle, à la taille de sa plus grande dimension. */}
       <ContactShadows position={[0, 0.002, 0]} scale={GRID_MAP.socle.width} resolution={1024} blur={2} opacity={0.5} far={2} />
@@ -216,4 +262,3 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
     </Canvas>
   );
 }
-

@@ -47,8 +47,9 @@ export function useHubClock() {
   }, [setTimeOfDay]);
 }
 
-/** Libellé lisible d'un bâtiment, à partir de son identifiant de plan. */
+/** Libellé lisible d'un bâtiment ou de la boutique, à partir de son identifiant de plan. */
 export function buildingLabel(id: string | null): string | null {
   if (!id) return null;
+  if (id === GRID_MAP.shopSite.id) return GRID_MAP.shopSite.label;
   return GRID_MAP.buildings.find((building) => building.id === id)?.label ?? null;
 }
