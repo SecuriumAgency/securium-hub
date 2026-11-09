@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Color, Object3D, QuadraticBezierCurve3, Vector3, type InstancedMesh } from "three";
-import { nodePosition } from "@/lib/matrix/tools";
+import { MATRIX_SITES, nodePosition } from "@/lib/matrix/tools";
 import { useMatrixStore, type MatrixState } from "@/store/useMatrixStore";
 
 // Flux de particules entre les bâtiments. Une seule InstancedMesh pour toute la scène : chaque flux réserve
@@ -109,6 +109,73 @@ export function DataFlows() {
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, total]} frustumCulled={false}>
       <sphereGeometry args={[1, 10, 8]} />
+      <meshBasicMaterial toneMapped={false} />
+    </instancedMesh>
+  );
+}
+
+// Particules en orbite autour de chaque site du Parc Sites. Leur nombre, leur vitesse et leur taille suivent les
+// sessions GA4 du dernier rapport, proportionnellement au site le plus visité. Sans rapport de trafic, chaque site
+// garde une seule particule lente : rien n'est inventé.
+const ORBIT_PER_SITE = 8;
+const ORBIT_RADIUS = 1.5;
+const ORBIT_HEIGHT = 1.25;
+
+export function TrafficOrbits() {
+  const meshRef = useRef<InstancedMesh>(null);
+  const total = MATRIX_SITES.length * ORBIT_PER_SITE;
+  const phase = useMemo(
+    () => Array.from({ length: total }, (_, index) => ((index % ORBIT_PER_SITE) / ORBIT_PER_SITE) * Math.PI * 2),
+    [total],
+  );
+  const dummy = useMemo(() => new Object3D(), []);
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const color = new Color("#4ade80");
+    for (let index = 0; index < total; index++) mesh.setColorAt(index, color);
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [total]);
+
+  useFrame((_, delta) => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const { metrics } = useMatrixStore.getState();
+    const bySite = metrics?.traffic?.bySite ?? {};
+    const sessions = MATRIX_SITES.map((site) => bySite[site.id]?.sessions ?? 0);
+    const peak = Math.max(1, ...sessions);
+
+    MATRIX_SITES.forEach((site, siteIndex) => {
+      // Ratio entre 0 et 1 : 0 sans donnée de trafic, 1 pour le site le plus visité.
+      const ratio = metrics?.traffic ? sessions[siteIndex] / peak : 0;
+      const visible = 1 + Math.round(ratio * (ORBIT_PER_SITE - 1));
+      const speed = 0.4 + ratio * 1.6;
+      for (let slot = 0; slot < ORBIT_PER_SITE; slot++) {
+        const index = siteIndex * ORBIT_PER_SITE + slot;
+        phase[index] += delta * speed;
+        if (slot < visible) {
+          const angle = phase[index];
+          dummy.position.set(
+            site.position[0] + Math.cos(angle) * ORBIT_RADIUS,
+            ORBIT_HEIGHT + Math.sin(angle * 2) * 0.15,
+            site.position[2] + Math.sin(angle) * ORBIT_RADIUS,
+          );
+          dummy.scale.setScalar(0.09 + ratio * 0.07);
+        } else {
+          dummy.position.set(0, -10, 0);
+          dummy.scale.setScalar(0);
+        }
+        dummy.updateMatrix();
+        mesh.setMatrixAt(index, dummy.matrix);
+      }
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, total]} frustumCulled={false}>
+      <sphereGeometry args={[1, 8, 6]} />
       <meshBasicMaterial toneMapped={false} />
     </instancedMesh>
   );
