@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { Box, RotateCcw } from "lucide-react";
 import { HubLoader } from "@/components/ui/HubLoader";
-import { buildingLabel, useHubClock, useHubStore } from "@/store/useHubStore";
+import { buildingLabel, useHubClock, useHubStore, useNetworkStatus, type SiteStatus } from "@/store/useHubStore";
 
 // Le moteur 3D (three, React Three Fiber, drei, ≈295 kB gzip) n'est chargé qu'au clic sur « Charger le Hub 3D ».
 // Tant que la scène est inactive, la page ne charge que le placeholder : aucun script 3D ne bloque le fil principal.
@@ -14,6 +14,10 @@ const HubScene = dynamic(() => import("./HubScene").then((module) => module.HubS
 });
 
 const GLASS = "rounded-full border border-slate-700/50 bg-slate-900/80 px-3 py-1 text-xs backdrop-blur-md";
+
+// Pastille et libellé par statut de site, pour l'infobulle.
+const STATUS_DOT: Record<SiteStatus, string> = { online: "bg-green-500", maintenance: "bg-amber-500", offline: "bg-red-500" };
+const STATUS_LABEL: Record<SiteStatus, string> = { online: "En ligne", maintenance: "Maintenance", offline: "Hors ligne" };
 
 // Heure locale, mise à jour chaque seconde. Nulle au rendu serveur : pas de décalage à l'hydratation.
 function useLocalClock() {
@@ -47,10 +51,12 @@ function Placeholder({ onActivate }: { onActivate: () => void }) {
 // Montée seulement avec la scène, pour qu'aucune mise à jour ne tourne tant que la 3D n'est pas chargée.
 function HubOverlays() {
   useHubClock();
+  useNetworkStatus();
   const now = useLocalClock();
   const timeOfDay = useHubStore((state) => state.timeOfDay);
   const systemStatus = useHubStore((state) => state.systemStatus);
   const activeNode = useHubStore((state) => state.activeNode);
+  const site = useHubStore((state) => state.sitesNetwork.find((item) => item.id === state.activeNode));
   const resetView = useHubStore((state) => state.resetView);
   const label = buildingLabel(activeNode);
   const online = systemStatus === "online";
@@ -70,7 +76,21 @@ function HubOverlays() {
 
       {label && (
         <div aria-live="polite" className="pointer-events-none absolute left-1/2 top-16 z-10 -translate-x-1/2">
-          <span className={`${GLASS} text-slate-100`}>{label}</span>
+          <span className={`${GLASS} flex items-center gap-2 text-slate-100`}>
+            {site ? (
+              <>
+                <span aria-hidden className={`size-2 rounded-full ${STATUS_DOT[site.status]}`} />
+                <span className="font-medium">{site.name}</span>
+                <span className="text-slate-400">{STATUS_LABEL[site.status]}</span>
+                <span className="text-slate-400">{site.activeVisitors} visiteurs actifs</span>
+              </>
+            ) : (
+              <>
+                <span className="font-medium">{label}</span>
+                <span className="text-slate-500">Statut indisponible</span>
+              </>
+            )}
+          </span>
         </div>
       )}
 
