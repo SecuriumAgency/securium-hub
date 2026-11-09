@@ -20,6 +20,7 @@
     "@vercel/blob": "^2.8.2",
     "@vercel/functions": "3.9.11",
     "imapflow": "2.3.0",
+    "leva": "^0.10.1",
     "lucide-react": "^1.61.0",
     "mailparser": "3.14.1",
     "next": "15.5.28",
