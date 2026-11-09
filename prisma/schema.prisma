@@ -362,3 +362,20 @@ model AgentTask {
 
   @@index([status, createdAt])
 }
+
+// Trafic GA4 d'un site pour un jour donné, envoyé par le rapport quotidien (securium-agency-v2).
+// Un enregistrement par site et par jour : un nouvel envoi du même jour remplace le précédent.
+model SiteTrafficDaily {
+  id         String   @id @default(cuid())
+  // Jour mesuré, AAAA-MM-JJ, au fuseau de Paris.
+  date       String
+  // Identifiant du site, tel que dans lib/mock-data.json (ex. "geoenergy-habitat").
+  siteId     String
+  sessions   Int
+  users      Int
+  pageviews  Int
+  receivedAt DateTime @default(now())
+
+  @@unique([date, siteId])
+  @@index([date])
+}

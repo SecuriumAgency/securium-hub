@@ -88,8 +88,12 @@ export function MatrixHud() {
             <dd className="mt-1 font-medium text-white">{FLEET_LABEL[fleetStatus ?? "unknown"]}</dd>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <dt className="text-[11px] uppercase tracking-wider text-slate-400">Trafic de référence</dt>
-            <dd className="mt-1 font-medium text-white">{formatNumber(site.traffic)}</dd>
+            <dt className="text-[11px] uppercase tracking-wider text-slate-400">
+              {metrics?.traffic?.bySite[site.id] ? `Sessions (${metrics.traffic.date})` : "Trafic de référence"}
+            </dt>
+            <dd className="mt-1 font-medium text-white">
+              {formatNumber(metrics?.traffic?.bySite[site.id]?.sessions ?? site.traffic)}
+            </dd>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
             <dt className="text-[11px] uppercase tracking-wider text-slate-400">Alertes en attente</dt>

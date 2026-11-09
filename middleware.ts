@@ -46,6 +46,8 @@ const PUBLIC_POSTS = new Set([
   "/api/webhooks/stripe",
   // Rapports de l'Orchestrateur (Discord) : sans session, authentifiés par ORCHESTRATOR_TOKEN dans la route.
   "/api/webhooks/orchestrator",
+  // Trafic GA4 par site, envoyé par le rapport quotidien (securium-agency-v2) : authentifié par HUB_API_KEY dans la route.
+  "/api/ecosystem/traffic",
 ]);
 
 export async function middleware(request: NextRequest) {

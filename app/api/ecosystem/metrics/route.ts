@@ -32,6 +32,15 @@ export async function GET() {
     const bySeverity = Object.fromEntries(SEVERITIES.map((severity) => [severity, 0])) as Record<TaskSeverity, number>;
     for (const row of pendingBySeverity) bySeverity[row.severity] = row._count._all;
 
+    // Dernier jour reçu du rapport GA4 : ses chiffres par site, ou null si aucun rapport n'est encore arrivé.
+    const latestTraffic = await prisma.siteTrafficDaily.findFirst({ orderBy: { date: "desc" }, select: { date: true } });
+    const trafficRows = latestTraffic
+      ? await prisma.siteTrafficDaily.findMany({
+          where: { date: latestTraffic.date },
+          select: { siteId: true, sessions: true, users: true, pageviews: true },
+        })
+      : [];
+
     const body: EcosystemMetrics = {
       generatedAt: now.toISOString(),
       dayStart: dayStart.toISOString(),
@@ -44,6 +53,14 @@ export async function GET() {
       },
       capturedLeads: { today: capturedToday },
       tasks: { pending: Object.values(bySeverity).reduce((sum, count) => sum + count, 0), bySeverity },
+      traffic: latestTraffic
+        ? {
+            date: latestTraffic.date,
+            bySite: Object.fromEntries(
+              trafficRows.map((row) => [row.siteId, { sessions: row.sessions, users: row.users, pageviews: row.pageviews }]),
+            ),
+          }
+        : null,
     };
     return NextResponse.json(body);
   } catch (error) {
