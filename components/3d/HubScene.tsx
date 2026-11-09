@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, type ComponentProps, type ComponentType, t
 import { useRouter } from "next/navigation";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls, useCursor } from "@react-three/drei";
-import { MathUtils, type Group } from "three";
-import { useHubStore, type TimeOfDay } from "@/store/useHubStore";
+import { MathUtils, Mesh, MeshStandardMaterial, type Group } from "three";
+import { useHubStore, type SiteStatus, type TimeOfDay } from "@/store/useHubStore";
 import AnimalBunny from "./assets/AnimalBunny";
 import AnimalCat from "./assets/AnimalCat";
 import AnimalDog from "./assets/AnimalDog";
@@ -41,6 +41,13 @@ const LIGHTS: Record<
   nuit: { ambient: "#818cf8", ambientIntensity: 0.35, sun: "#c4b5fd", sunIntensity: 0.6, background: "#1e1b4b", sky: "#6366f1", ground: "#1e1b4b", hemisphere: 0.5 },
 };
 
+// Lueur d'alerte selon le statut du site : orange en maintenance, rouge hors ligne, aucune en ligne.
+const ALERT_GLOW: Record<SiteStatus, { color: string; intensity: number }> = {
+  online: { color: "#000000", intensity: 0 },
+  maintenance: { color: "#f59e0b", intensity: 0.4 },
+  offline: { color: "#ef4444", intensity: 0.4 },
+};
+
 // HDRI locale, téléchargée par scripts/fetch-hub-env.mjs. Sans ce fichier, la scène n'appelle aucun CDN.
 const HDRI_URL = "/models/env/city.hdr";
 
@@ -74,7 +81,36 @@ function Interactive({
   const ref = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const setActiveNode = useHubStore((state) => state.setActiveNode);
+  const status = useHubStore((state) => state.sitesNetwork.find((site) => site.id === id)?.status ?? "online");
+  const glow = ALERT_GLOW[status];
   useCursor(hovered);
+
+  // Les modèles gltf partagent leurs matériaux entre bâtiments identiques : chaque instance reçoit les siens, pour une lueur propre.
+  useEffect(() => {
+    const group = ref.current;
+    if (!group) return;
+    group.traverse((object) => {
+      if (object instanceof Mesh) {
+        object.material = Array.isArray(object.material) ? object.material.map((material) => material.clone()) : object.material.clone();
+      }
+    });
+  }, []);
+
+  // Lueur d'alerte : seuls les matériaux standard reçoivent une émission.
+  useEffect(() => {
+    const group = ref.current;
+    if (!group) return;
+    group.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        if (material instanceof MeshStandardMaterial) {
+          material.emissive.set(glow.color);
+          material.emissiveIntensity = glow.intensity;
+        }
+      }
+    });
+  }, [glow]);
 
   useFrame((_, delta) => {
     const group = ref.current;
