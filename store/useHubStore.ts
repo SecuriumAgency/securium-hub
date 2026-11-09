@@ -37,6 +37,9 @@ type HubState = {
   timeOfDay: TimeOfDay;
   systemStatus: SystemStatus;
   activeNode: string | null;
+  // Nœud sélectionné (clic sur un bâtiment ou dans la barre) : la caméra s'en approche et la barre le surligne.
+  selectedNode: string | null;
+  selectNode: (id: string | null) => void;
   // Incrémenté par « Réinitialiser la vue » : la caméra revient à sa position de départ.
   viewVersion: number;
   // Statut du réseau : sites des bâtiments, chargement en cours, échec du dernier appel.
@@ -62,6 +65,8 @@ export const useHubStore = create<HubState>()((set, get) => ({
   // Statut simulé : aucune télémétrie n'alimente encore cette valeur.
   systemStatus: "online",
   activeNode: null,
+  selectedNode: null,
+  selectNode: (selectedNode) => set({ selectedNode }),
   viewVersion: 0,
   sitesNetwork: [],
   isLoading: false,
@@ -76,7 +81,8 @@ export const useHubStore = create<HubState>()((set, get) => ({
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
   setSystemStatus: (systemStatus) => set({ systemStatus }),
   setActiveNode: (activeNode) => set({ activeNode }),
-  resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1 })),
+  // « Vue globale » : la caméra revient à sa place de départ, et la sélection est levée.
+  resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1, selectedNode: null })),
   fetchNetworkStatus: async () => {
     const { addLog } = get();
     set({ isLoading: true, hasError: false });

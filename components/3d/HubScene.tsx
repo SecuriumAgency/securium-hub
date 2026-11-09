@@ -4,33 +4,32 @@ import { useEffect, useRef, useState, type ComponentProps, type ComponentType, t
 import { useRouter } from "next/navigation";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls, useCursor } from "@react-three/drei";
-import { MathUtils, Mesh, MeshStandardMaterial, type Group } from "three";
+import { MathUtils, Mesh, MeshStandardMaterial, Vector3, type Group } from "three";
 import { useHubStore, type SiteStatus, type TimeOfDay } from "@/store/useHubStore";
 import AnimalBunny from "./assets/AnimalBunny";
 import AnimalCat from "./assets/AnimalCat";
 import AnimalDog from "./assets/AnimalDog";
 import BuildingA from "./assets/BuildingA";
 import BuildingC from "./assets/BuildingC";
-import CharacterFemaleA from "./assets/CharacterFemaleA";
-import CharacterMaleA from "./assets/CharacterMaleA";
 import Floor from "./assets/Floor";
 import Freezer from "./assets/Freezer";
+import RoadCrossroad from "./assets/RoadCrossroad";
+import RoadEnd from "./assets/RoadEnd";
 import RoadStraight from "./assets/RoadStraight";
 import WallWindow from "./assets/WallWindow";
 import { DioramaIsland } from "./DioramaIsland";
 import { IdleBreathing } from "./animations/IdleBreathing";
 import type { BreathingOptions } from "./animations/useIdleBreathing";
-import { TrafficController } from "./animations/TrafficController";
 import { CityEnvironment } from "./CityEnvironment";
-import { GRID_MAP, type AnimalModel, type BuildingModel, type CharacterModel, type Placement, type ShopModel, type Vec3 } from "./hubGrid";
+import { UrbanLifeSimulation } from "./UrbanLifeSimulation";
+import { GRID_MAP, type AnimalModel, type BuildingModel, type Placement, type ShopModel, type Vec3 } from "./hubGrid";
 
 type GroupProps = ComponentProps<"group">;
-type OrbitLike = { target: { set: (x: number, y: number, z: number) => void }; update: () => void };
+type OrbitTarget = { target: Vector3; update: () => void };
 
 // Modèles gltfjsx, indexés par le nom qu'utilise le plan (hubGrid.ts).
 const BUILDING_MODELS: Record<BuildingModel, ComponentType<GroupProps>> = { "building-a": BuildingA, "building-c": BuildingC };
 const SHOP_MODELS: Record<ShopModel, ComponentType<GroupProps>> = { floor: Floor, "wall-window": WallWindow, freezer: Freezer };
-const CHARACTER_MODELS: Record<CharacterModel, ComponentType<GroupProps>> = { male: CharacterMaleA, female: CharacterFemaleA };
 const ANIMAL_MODELS: Record<AnimalModel, ComponentType<GroupProps>> = { cat: AnimalCat, dog: AnimalDog, bunny: AnimalBunny };
 
 // Ambiance par moment de la journée : lumière blanche éclatante le jour, teintes bleutées et violettes la nuit.
@@ -42,12 +41,17 @@ const LIGHTS: Record<
   nuit: { ambient: "#818cf8", ambientIntensity: 0.35, sun: "#c4b5fd", sunIntensity: 0.6, background: "#1e1b4b", sky: "#6366f1", ground: "#1e1b4b", hemisphere: 0.5 },
 };
 
-// Lueur d'alerte selon le statut du site : orange en maintenance, rouge hors ligne, aucune en ligne.
+// Lueur par état, dans l'ordre de priorité : alerte du site, sélection, fenêtres allumées la nuit, sinon aucune.
 const ALERT_GLOW: Record<SiteStatus, { color: string; intensity: number }> = {
   online: { color: "#000000", intensity: 0 },
   maintenance: { color: "#f59e0b", intensity: 0.4 },
   offline: { color: "#ef4444", intensity: 0.4 },
 };
+const SELECTED_GLOW = { color: "#22d3ee", intensity: 0.35 };
+const WINDOW_GLOW = { color: "#fbbf24", intensity: 0.12 };
+
+// Distance de la caméra à la cible lors d'un focus sur un bâtiment.
+const FOCUS_OFFSET: Vec3 = [4, 5, 4];
 
 // HDRI locale, téléchargée par scripts/fetch-hub-env.mjs. Sans ce fichier, la scène n'appelle aucun CDN.
 const HDRI_URL = "/models/env/city.hdr";
@@ -63,7 +67,7 @@ function EnvironmentLight({ timeOfDay, hdri }: { timeOfDay: TimeOfDay; hdri: boo
 type OpenHandler = (href: string) => void;
 
 // Bâtiment commercial interactif. Au survol : curseur pointeur, identifiant dans le store (infobulle de l'overlay),
-// +5 % d'échelle. Au clic : navigation vers la page d'administration liée. Le pivot est le centre de l'ensemble.
+// +5 % d'échelle. Premier clic : sélection (la caméra s'approche, la barre surligne). Second clic : page admin liée.
 function Interactive({
   id,
   href,
@@ -83,7 +87,9 @@ function Interactive({
   const [hovered, setHovered] = useState(false);
   const setActiveNode = useHubStore((state) => state.setActiveNode);
   const status = useHubStore((state) => state.sitesNetwork.find((site) => site.id === id)?.status ?? "online");
-  const glow = ALERT_GLOW[status];
+  const selected = useHubStore((state) => state.selectedNode === id);
+  const timeOfDay = useHubStore((state) => state.timeOfDay);
+  const glow = status !== "online" ? ALERT_GLOW[status] : selected ? SELECTED_GLOW : timeOfDay === "nuit" ? WINDOW_GLOW : ALERT_GLOW.online;
   useCursor(hovered);
 
   // Les modèles gltf partagent leurs matériaux entre bâtiments identiques : chaque instance reçoit les siens, pour une lueur propre.
@@ -97,7 +103,7 @@ function Interactive({
     });
   }, []);
 
-  // Lueur d'alerte : seuls les matériaux standard reçoivent une émission.
+  // Lueur : seuls les matériaux standard reçoivent une émission.
   useEffect(() => {
     const group = ref.current;
     if (!group) return;
@@ -130,7 +136,9 @@ function Interactive({
   };
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
-    onOpen(href);
+    const { selectedNode, selectNode } = useHubStore.getState();
+    if (selectedNode === id) onOpen(href);
+    else selectNode(id);
   };
 
   return (
@@ -142,14 +150,31 @@ function Interactive({
   );
 }
 
-// Routes continues sur l'axe du plan : une tuile par case, de x = -6 à x = 6.
+// Cases d'une rue perpendiculaire, du carrefour jusqu'à la case juste avant son cul-de-sac.
+function branchTiles(end: number): number[] {
+  const step = Math.sign(end);
+  const tiles: number[] = [];
+  for (let tile = step; tile !== end; tile += step) tiles.push(tile);
+  return tiles;
+}
+
+// Routes : l'axe est-ouest, un carrefour en croix en x = 0, et deux rues au nord et au sud, chacune en cul-de-sac.
 function Roads() {
-  const { z, from, to } = GRID_MAP.roads;
-  const xs = Array.from({ length: to - from + 1 }, (_, index) => from + index);
+  const { z, from, to, cross } = GRID_MAP.roads;
+  const xs = Array.from({ length: to - from + 1 }, (_, index) => from + index).filter((x) => x !== cross.x);
   return (
     <group>
       {xs.map((x) => (
         <RoadStraight key={`route-${x}`} position={[x, 0, z]} rotation={[0, 0, 0]} />
+      ))}
+      <RoadCrossroad position={[cross.x, 0, z]} rotation={[0, 0, 0]} />
+      {[cross.north, cross.south].map((end) => (
+        <group key={`branch-${end}`}>
+          {branchTiles(end).map((tile) => (
+            <RoadStraight key={`branch-${end}-${tile}`} position={[cross.x, 0, tile]} rotation={[0, Math.PI / 2, 0]} />
+          ))}
+          <RoadEnd position={[cross.x, 0, end]} rotation={[0, 0, 0]} />
+        </group>
       ))}
     </group>
   );
@@ -174,7 +199,7 @@ function Figurant({
   );
 }
 
-// Diorama posé sur le socle : routes, rangées de bâtiments, boutique, trottoirs, coin parc et taxi.
+// Diorama posé sur le socle : routes, rangées de bâtiments, boutique, animaux et ville vivante.
 function Diorama({ onOpen }: { onOpen: OpenHandler }) {
   const [shopX, shopY, shopZ] = GRID_MAP.shopSite.center;
   return (
@@ -211,15 +236,6 @@ function Diorama({ onOpen }: { onOpen: OpenHandler }) {
         })}
       </Interactive>
 
-      {GRID_MAP.characters.map((character, index) => (
-        <Figurant
-          key={character.id}
-          placement={character}
-          Model={CHARACTER_MODELS[character.model]}
-          breathing={{ amplitude: 0.03, speed: 2, sway: 0.1, swaySpeed: 0.8, phase: index }}
-        />
-      ))}
-
       {GRID_MAP.animals.map((animal, index) => (
         <Figurant
           key={animal.id}
@@ -229,7 +245,7 @@ function Diorama({ onOpen }: { onOpen: OpenHandler }) {
         />
       ))}
 
-      <TrafficController />
+      <UrbanLifeSimulation />
     </group>
   );
 }
@@ -238,7 +254,7 @@ function Diorama({ onOpen }: { onOpen: OpenHandler }) {
 function ViewReset() {
   const viewVersion = useHubStore((state) => state.viewVersion);
   const camera = useThree((state) => state.camera);
-  const controls = useThree((state) => state.controls) as unknown as OrbitLike | null;
+  const controls = useThree((state) => state.controls) as unknown as OrbitTarget | null;
 
   useEffect(() => {
     if (viewVersion === 0) return;
@@ -247,6 +263,41 @@ function ViewReset() {
     controls?.target.set(...GRID_MAP.target);
     controls?.update();
   }, [viewVersion, camera, controls]);
+
+  return null;
+}
+
+// Centre d'un nœud du plan : bâtiment ou boutique, à hauteur de la cible de l'orbite.
+function nodePosition(id: string): Vec3 | null {
+  if (id === GRID_MAP.shopSite.id) return [GRID_MAP.shopSite.center[0], 0.5, GRID_MAP.shopSite.center[2]];
+  const building = GRID_MAP.buildings.find((item) => item.id === id);
+  return building ? [building.x, 0.5, building.z] : null;
+}
+
+// Un nœud sélectionné attire la caméra. Le mouvement s'arrête à la cible, pour que l'orbite reste libre ensuite.
+function CameraFocus() {
+  const selectedNode = useHubStore((state) => state.selectedNode);
+  const camera = useThree((state) => state.camera);
+  const controls = useThree((state) => state.controls) as unknown as OrbitTarget | null;
+  const focus = useRef({ active: false, target: new Vector3(), view: new Vector3() });
+
+  useEffect(() => {
+    const position = selectedNode ? nodePosition(selectedNode) : null;
+    if (!position) return;
+    focus.current.target.set(position[0], position[1], position[2]);
+    focus.current.view.set(position[0] + FOCUS_OFFSET[0], position[1] + FOCUS_OFFSET[1], position[2] + FOCUS_OFFSET[2]);
+    focus.current.active = true;
+  }, [selectedNode]);
+
+  useFrame((_, delta) => {
+    const state = focus.current;
+    if (!state.active || !controls) return;
+    const k = 1 - Math.exp(-4 * delta);
+    controls.target.lerp(state.target, k);
+    camera.position.lerp(state.view, k);
+    controls.update();
+    if (controls.target.distanceTo(state.target) < 0.01 && camera.position.distanceTo(state.view) < 0.05) state.active = false;
+  });
 
   return null;
 }
@@ -303,6 +354,7 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
         target={GRID_MAP.target}
       />
       <ViewReset />
+      <CameraFocus />
     </Canvas>
   );
 }
