@@ -11,11 +11,13 @@ import { MATRIX_SITES, MATRIX_TOOLS, nodePosition } from "@/lib/matrix/tools";
 import { formatNumber } from "@/lib/sites";
 import { useFleet } from "@/lib/use-fleet";
 import { useMatrixStore } from "@/store/useMatrixStore";
-import { CityGrid } from "./CityGrid";
 import { DataFlows, TrafficOrbits } from "./DataFlows";
 import { GlobalLogStream } from "./GlobalLogStream";
 import { MatrixHud } from "./MatrixHud";
 import { MatrixNode } from "./MatrixNode";
+import { Npcs } from "./Npcs";
+import { SUN, Village } from "./Village";
+import { Traffic } from "./Traffic";
 
 const OVERVIEW_TARGET = new Vector3(0, 0, -1);
 const OVERVIEW_CAMERA = new Vector3(18, 22, 26);
@@ -54,7 +56,8 @@ function CameraRig() {
   return null;
 }
 
-// Scène « God Mode » : 18 outils et les sites clients en bâtiments, reliés par des flux de données.
+// Scène « Village vivant » : outils et sites clients en bâtiments, dans un village de jour avec routes,
+// véhicules, PNJ et flux de données.
 export function MatrixScene() {
   const overlay = useRef<HTMLDivElement>(null);
   const sites = useFleet();
@@ -80,32 +83,33 @@ export function MatrixScene() {
   const portal = overlay as RefObject<HTMLElement>;
 
   return (
-    <div ref={overlay} className="relative h-dvh w-full overflow-hidden bg-[#05070d]">
+    <div ref={overlay} className="relative h-dvh w-full overflow-hidden bg-sky-200">
       <Canvas
         shadows="percentage"
         dpr={[1, 2]}
-        camera={{ position: [18, 22, 26], fov: 36, near: 0.1, far: 200 }}
+        camera={{ position: [18, 22, 26], fov: 36, near: 0.1, far: 300 }}
         onPointerMissed={() => select(null)}
       >
-        <color attach="background" args={["#05070d"]} />
-        <fog attach="fog" args={["#05070d", 45, 110]} />
+        <fog attach="fog" args={["#dbeafe", 60, 150]} />
 
-        <ambientLight intensity={0.4} />
-        <hemisphereLight args={["#38bdf8", "#020617", 0.6]} />
+        <ambientLight intensity={0.5} />
+        <hemisphereLight args={["#bae6fd", "#4ade80", 0.7]} />
         <directionalLight
           castShadow
-          position={[10, 20, 8]}
-          intensity={1.5}
+          position={SUN}
+          intensity={1.6}
           shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-22}
-          shadow-camera-right={22}
-          shadow-camera-top={22}
-          shadow-camera-bottom={-22}
+          shadow-camera-left={-24}
+          shadow-camera-right={24}
+          shadow-camera-top={24}
+          shadow-camera-bottom={-24}
         />
         {/* La lumière centrale s'intensifie avec le nombre de tâches attribuées par l'Orchestrateur. */}
-        <pointLight position={[0, 4, 0]} color="#22d3ee" intensity={0.8 + Math.min(pendingTotal, 8) * 0.25} distance={28} />
+        <pointLight position={[0, 4, 0]} color="#fde68a" intensity={0.4 + Math.min(pendingTotal, 8) * 0.12} distance={26} />
 
-        <CityGrid />
+        <Village />
+        <Traffic />
+        <Npcs />
         <DataFlows />
         <TrafficOrbits />
         <CameraRig />
@@ -139,7 +143,7 @@ export function MatrixScene() {
             key={site.id}
             id={site.id}
             label={site.label}
-            shape="cabin"
+            shape="house"
             accent="#34d399"
             position={site.position}
             scale={0.85}
