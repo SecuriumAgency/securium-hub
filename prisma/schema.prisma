@@ -329,3 +329,36 @@ model LeadBatch {
   leads      CapturedLead[]
   createdAt  DateTime          @default(now())
 }
+
+enum AgentTaskType {
+  SEO
+  DEV
+  SECURITE
+  UI
+}
+
+enum AgentTaskStatus {
+  PENDING
+  DONE
+}
+
+enum AgentSeverity {
+  info
+  warning
+  critical
+}
+
+// Tâche d'optimisation créée par l'Orchestrateur à partir d'un rapport Discord (POST /api/webhooks/orchestrator).
+// Affichée par le dashboard et récupérée par les agents (GET /api/tasks/pending).
+model AgentTask {
+  id            String          @id @default(cuid())
+  site          String
+  type          AgentTaskType
+  severity      AgentSeverity
+  status        AgentTaskStatus @default(PENDING)
+  description   String
+  assignedAgent String?
+  createdAt     DateTime        @default(now())
+
+  @@index([status, createdAt])
+}

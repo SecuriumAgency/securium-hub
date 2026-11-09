@@ -20,6 +20,8 @@ const PUBLIC_PATHS = new Set([
   "/api/cron/chasseur",
   "/api/cron/prospector",
   "/api/cron/auto-sender",
+  // Tâches de l'Orchestrateur : lues par le dashboard (session) ou par un agent (ORCHESTRATOR_TOKEN). La route vérifie les deux.
+  "/api/tasks/pending",
   // Fichier de vérification de domaine TikTok : TikTok le lit sans cookie. Seul ce chemin exact est ouvert.
   "/api/auth/tiktok/callback/tiktoktzmiw1sr4b9DeMjCYXNSxJ3JSimF90QZ.txt",
   // Vérification du préfixe d'URL TikTok (racine du domaine) : TikTok le lit sans cookie. Seul ce chemin exact est ouvert.
@@ -42,6 +44,8 @@ const PUBLIC_POSTS = new Set([
   "/api/chasseur/ingest",
   // Stripe appelle ce webhook sans session : la signature est vérifiée dans la route.
   "/api/webhooks/stripe",
+  // Rapports de l'Orchestrateur (Discord) : sans session, authentifiés par ORCHESTRATOR_TOKEN dans la route.
+  "/api/webhooks/orchestrator",
 ]);
 
 export async function middleware(request: NextRequest) {
