@@ -2,12 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { Box, RotateCcw } from "lucide-react";
 import { HubLoader } from "@/components/ui/HubLoader";
 import { buildingLabel, useHubClock, useHubStore } from "@/store/useHubStore";
 
-// Le moteur 3D (three, React Three Fiber, drei) n'est chargé que dans le navigateur, après l'affichage de la page.
-// Le conteneur a une hauteur fixe et le squelette occupe la même place : aucun décalage de mise en page (CLS).
+// Le moteur 3D (three, React Three Fiber, drei, ≈295 kB gzip) n'est chargé qu'au clic sur « Charger le Hub 3D ».
+// Tant que la scène est inactive, la page ne charge que le placeholder : aucun script 3D ne bloque le fil principal.
 const HubScene = dynamic(() => import("./HubScene").then((module) => module.HubScene), {
   ssr: false,
   loading: () => <HubLoader />,
@@ -26,7 +26,26 @@ function useLocalClock() {
   return now;
 }
 
-export function HubView({ hdri = false }: { hdri?: boolean }) {
+// Façade : même conteneur, même taille, que la scène soit active ou non. Le clic remplace le placeholder
+// par la scène, sans modifier la mise en page (aucun CLS).
+function Placeholder({ onActivate }: { onActivate: () => void }) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950">
+      <button
+        type="button"
+        onClick={onActivate}
+        className="flex min-h-11 items-center gap-3 rounded-full border border-slate-600 bg-slate-900/80 px-6 py-3 text-sm font-medium text-slate-100 backdrop-blur-md transition-colors hover:border-cyan-400/60 hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+      >
+        <Box aria-hidden className="size-5 text-cyan-300" />
+        Charger le Hub 3D Interactif
+      </button>
+    </div>
+  );
+}
+
+// Surcouche HTML de la scène active : heure, statut, infobulle du bâtiment survolé, aide et réinitialisation.
+// Montée seulement avec la scène, pour qu'aucune mise à jour ne tourne tant que la 3D n'est pas chargée.
+function HubOverlays() {
   useHubClock();
   const now = useLocalClock();
   const timeOfDay = useHubStore((state) => state.timeOfDay);
@@ -37,13 +56,7 @@ export function HubView({ hdri = false }: { hdri?: boolean }) {
   const online = systemStatus === "online";
 
   return (
-    <div className="relative h-[600px] w-full overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
-      <HubScene hdri={hdri} />
-
-      <div className="pointer-events-none absolute left-4 top-4 z-10">
-        <span className={`${GLASS} text-slate-200`}>Securium Hub 3D - Live Preview</span>
-      </div>
-
+    <>
       <div className="absolute right-4 top-4 z-10">
         <button
           type="button"
@@ -76,6 +89,27 @@ export function HubView({ hdri = false }: { hdri?: boolean }) {
             : "--:--:-- · …"}
         </span>
         <span className="text-[11px] text-slate-500">Securium City Hub v1.0</span>
+      </div>
+    </>
+  );
+}
+
+export function HubView({ hdri = false }: { hdri?: boolean }) {
+  const [is3DActive, setIs3DActive] = useState(false);
+
+  return (
+    <div className="relative h-[600px] w-full overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
+      {is3DActive ? (
+        <>
+          <HubScene hdri={hdri} />
+          <HubOverlays />
+        </>
+      ) : (
+        <Placeholder onActivate={() => setIs3DActive(true)} />
+      )}
+
+      <div className="pointer-events-none absolute left-4 top-4 z-10">
+        <span className={`${GLASS} text-slate-200`}>Securium Hub 3D - Live Preview</span>
       </div>
     </div>
   );

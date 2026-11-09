@@ -4,7 +4,7 @@ export function HubLoader() {
     <div
       role="status"
       aria-label="Chargement du hub 3D"
-      className="flex h-full w-full items-center justify-center bg-slate-50"
+      className="flex h-full w-full items-center justify-center bg-slate-950"
     >
       <div className="flex flex-col items-center gap-4">
         <div className="size-14 animate-spin rounded-full border-4 border-slate-200 border-t-slate-500" aria-hidden />

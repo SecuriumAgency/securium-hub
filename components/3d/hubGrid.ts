@@ -16,6 +16,8 @@ export type Placement<Model extends string> = {
   z: number;
   rotation: number;
   scale?: number;
+  // Décalage vertical, pour poser le modèle à l'échelle : le pied ou la roue touche le sol.
+  lift?: number;
 };
 
 export type BuildingPlacement = Placement<BuildingModel> & { label: string };
@@ -29,7 +31,7 @@ export const GRID_MAP = {
   // Axe de routes continu : 13 tuiles de x = -6 à x = 6, sur z = 0.
   roads: { z: 0, from: -6, to: 6 },
   // Voie du taxi : au centre de la chaussée (largeur 1), il roule vers +x et repart de -6 quand il dépasse 6.
-  traffic: { lane: 0, from: -6, to: 6, speed: 1.2 },
+  traffic: { lane: 0, from: -6, to: 6, speed: 1.2, scale: 0.8, lift: 0 },
   // Rangée avant (z = -2), face à la route ; rangée arrière (z = -4), derrière.
   buildings: [
     { id: "immeuble-a-rue", label: "Immeuble A · rue", model: "building-a", x: -4, z: -2, rotation: 0 },
@@ -47,15 +49,15 @@ export const GRID_MAP = {
   ] as Placement<ShopModel>[],
   // Trottoirs : nord (z = -1, devant la rangée avant) et sud (z = 1, de l'autre côté de la route).
   characters: [
-    { id: "pieton-1", model: "male", x: -3, z: -1, rotation: 0, scale: 0.8 },
-    { id: "pieton-2", model: "female", x: 1, z: -1, rotation: 0, scale: 0.8 },
-    { id: "pieton-3", model: "male", x: -1, z: 1, rotation: Math.PI, scale: 0.8 },
-    { id: "pieton-4", model: "female", x: 4, z: 1, rotation: Math.PI, scale: 0.8 },
+    { id: "pieton-1", model: "male", x: -3, z: -1, rotation: 0, scale: 0.35 },
+    { id: "pieton-2", model: "female", x: 1, z: -1, rotation: 0, scale: 0.35 },
+    { id: "pieton-3", model: "male", x: -1, z: 1, rotation: Math.PI, scale: 0.35 },
+    { id: "pieton-4", model: "female", x: 4, z: 1, rotation: Math.PI, scale: 0.35 },
   ] as Placement<CharacterModel>[],
   // Coin parc, au sud-ouest : les animaux restent à l'écart des routes et des bâtiments.
   animals: [
-    { id: "chat", model: "cat", x: -6.5, z: 3.5, rotation: Math.PI / 2, scale: 0.5 },
-    { id: "chien", model: "dog", x: -5.5, z: 4.5, rotation: Math.PI, scale: 0.5 },
-    { id: "lapin", model: "bunny", x: -7, z: 5, rotation: 0, scale: 0.5 },
+    { id: "chat", model: "cat", x: -6.5, z: 3.5, rotation: Math.PI / 2, scale: 0.08, lift: 0 },
+    { id: "chien", model: "dog", x: -5.5, z: 4.5, rotation: Math.PI, scale: 0.08, lift: 0 },
+    { id: "lapin", model: "bunny", x: -7, z: 5, rotation: 0, scale: 0.08, lift: 0 },
   ] as Placement<AnimalModel>[],
 } as const;

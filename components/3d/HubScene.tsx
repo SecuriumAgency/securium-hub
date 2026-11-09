@@ -108,7 +108,7 @@ function Figurant({
   breathing: BreathingOptions;
 }) {
   return (
-    <group position={[placement.x, 0, placement.z]} rotation={[0, placement.rotation, 0]} scale={placement.scale ?? 1}>
+    <group position={[placement.x, placement.lift ?? 0, placement.z]} rotation={[0, placement.rotation, 0]} scale={placement.scale ?? 1}>
       <IdleBreathing {...breathing}>
         <Model />
       </IdleBreathing>
@@ -216,3 +216,4 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
     </Canvas>
   );
 }
+
