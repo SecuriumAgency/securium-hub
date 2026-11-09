@@ -6,31 +6,22 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import { ContactShadows, Environment, OrbitControls, useCursor } from "@react-three/drei";
 import { MathUtils, Mesh, MeshStandardMaterial, Vector3, type Group } from "three";
 import { useHubStore, type SiteStatus, type TimeOfDay } from "@/store/useHubStore";
-import AnimalBunny from "./assets/AnimalBunny";
-import AnimalCat from "./assets/AnimalCat";
-import AnimalDog from "./assets/AnimalDog";
 import BuildingA from "./assets/BuildingA";
 import BuildingC from "./assets/BuildingC";
 import Floor from "./assets/Floor";
 import Freezer from "./assets/Freezer";
-import RoadCrossroad from "./assets/RoadCrossroad";
-import RoadEnd from "./assets/RoadEnd";
-import RoadStraight from "./assets/RoadStraight";
 import WallWindow from "./assets/WallWindow";
 import { DioramaIsland } from "./DioramaIsland";
-import { IdleBreathing } from "./animations/IdleBreathing";
-import type { BreathingOptions } from "./animations/useIdleBreathing";
 import { CityEnvironment } from "./CityEnvironment";
 import { UrbanLifeSimulation } from "./UrbanLifeSimulation";
-import { GRID_MAP, type AnimalModel, type BuildingModel, type Placement, type ShopModel, type Vec3 } from "./hubGrid";
+import { GRID_MAP, type BuildingModel, type ShopModel, type Vec3 } from "./hubGrid";
 
 type GroupProps = ComponentProps<"group">;
 type OrbitTarget = { target: Vector3; update: () => void };
 
-// Modèles gltfjsx, indexés par le nom qu'utilise le plan (hubGrid.ts).
+// Modèles gltfjsx des bâtiments du NOC, indexés par le nom qu'utilise le plan (hubGrid.ts).
 const BUILDING_MODELS: Record<BuildingModel, ComponentType<GroupProps>> = { "building-a": BuildingA, "building-c": BuildingC };
 const SHOP_MODELS: Record<ShopModel, ComponentType<GroupProps>> = { floor: Floor, "wall-window": WallWindow, freezer: Freezer };
-const ANIMAL_MODELS: Record<AnimalModel, ComponentType<GroupProps>> = { cat: AnimalCat, dog: AnimalDog, bunny: AnimalBunny };
 
 // Ambiance par moment de la journée : lumière blanche éclatante le jour, teintes bleutées et violettes la nuit.
 const LIGHTS: Record<
@@ -151,62 +142,11 @@ function Interactive({
   );
 }
 
-// Cases d'une rue perpendiculaire, du carrefour jusqu'à la case juste avant son cul-de-sac.
-function branchTiles(end: number): number[] {
-  const step = Math.sign(end);
-  const tiles: number[] = [];
-  for (let tile = step; tile !== end; tile += step) tiles.push(tile);
-  return tiles;
-}
-
-// Routes : l'axe est-ouest, un carrefour en croix en x = 0, et deux rues au nord et au sud, chacune en cul-de-sac.
-function Roads() {
-  const { z, from, to, cross } = GRID_MAP.roads;
-  const xs = Array.from({ length: to - from + 1 }, (_, index) => from + index).filter((x) => x !== cross.x);
-  return (
-    <group>
-      {xs.map((x) => (
-        <RoadStraight key={`route-${x}`} position={[x, 0, z]} rotation={[0, 0, 0]} />
-      ))}
-      <RoadCrossroad position={[cross.x, 0, z]} rotation={[0, 0, 0]} />
-      {[cross.north, cross.south].map((end) => (
-        <group key={`branch-${end}`}>
-          {branchTiles(end).map((tile) => (
-            <RoadStraight key={`branch-${end}-${tile}`} position={[cross.x, 0, tile]} rotation={[0, Math.PI / 2, 0]} />
-          ))}
-          <RoadEnd position={[cross.x, 0, end]} rotation={[0, 0, 0]} />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-// Figurant ou animal posé sur sa case, qui respire doucement. L'échelle du plan s'applique à l'enveloppe externe.
-function Figurant({
-  placement,
-  Model,
-  breathing,
-}: {
-  placement: Placement<string>;
-  Model: ComponentType<GroupProps>;
-  breathing: BreathingOptions;
-}) {
-  return (
-    <group position={[placement.x, placement.lift ?? 0, placement.z]} rotation={[0, placement.rotation, 0]} scale={placement.scale ?? 1}>
-      <IdleBreathing {...breathing}>
-        <Model />
-      </IdleBreathing>
-    </group>
-  );
-}
-
-// Diorama posé sur le socle : routes, rangées de bâtiments, boutique, animaux et ville vivante.
+// Diorama du NOC : bâtiments interactifs, boutique et ville vivante. Le village statique est dans CityEnvironment.
 function Diorama({ onOpen }: { onOpen: OpenHandler }) {
   const [shopX, shopY, shopZ] = GRID_MAP.shopSite.center;
   return (
     <group>
-      <Roads />
-
       {GRID_MAP.buildings.map((building) => {
         const Model = BUILDING_MODELS[building.model];
         return (
@@ -236,15 +176,6 @@ function Diorama({ onOpen }: { onOpen: OpenHandler }) {
           return <Model key={item.id} position={[item.x - shopX, 0, item.z - shopZ]} rotation={[0, item.rotation, 0]} />;
         })}
       </Interactive>
-
-      {GRID_MAP.animals.map((animal, index) => (
-        <Figurant
-          key={animal.id}
-          placement={animal}
-          Model={ANIMAL_MODELS[animal.model]}
-          breathing={{ amplitude: 0.02, speed: 2.4, pulse: 0.03, phase: index * 1.3 }}
-        />
-      ))}
 
       <UrbanLifeSimulation />
     </group>
@@ -303,7 +234,7 @@ function CameraFocus() {
   return null;
 }
 
-// Scène du hub : éclairage selon l'heure, socle ardoise, diorama sur le plan et contrôles de caméra.
+// Scène du hub : éclairage selon l'heure, dalle verte, socle ardoise, village et contrôles de caméra.
 // useRouter est appelé ici, dans l'arbre React du DOM : le Canvas R3F est un rendu séparé, qui n'a pas accès au contexte du routeur.
 export function HubScene({ hdri = false }: { hdri?: boolean }) {
   const timeOfDay = useHubStore((state) => state.timeOfDay);
@@ -323,25 +254,25 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
         castShadow
         intensity={light.sunIntensity}
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-far={50}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
+        shadow-camera-far={90}
+        shadow-camera-left={-40}
+        shadow-camera-right={40}
+        shadow-camera-top={40}
+        shadow-camera-bottom={-40}
       />
       <EnvironmentLight timeOfDay={timeOfDay} hdri={hdri} />
 
-      {/* Sol vert autour de l'îlot : sous la face supérieure du socle (y = 0), il n'apparaît qu'en bordure. */}
+      {/* Dalle verte : le village s'étend dessus, jusqu'aux bords. Sous la face supérieure du socle (y = 0). */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
         <planeGeometry args={[150, 150]} />
         <meshStandardMaterial color="#4ade80" />
       </mesh>
 
       <DioramaIsland />
+      <CityEnvironment night={timeOfDay === "nuit"} />
       <Diorama onOpen={open} />
-      <CityEnvironment />
 
-      {/* Ombres de contact posées sur la face supérieure du socle, à la taille de sa plus grande dimension. */}
+      {/* Ombres de contact posées sur la dalle, à la taille de la zone bâtie. */}
       <ContactShadows position={[0, 0.002, 0]} scale={GRID_MAP.socle.width} resolution={1024} blur={2} opacity={0.5} far={2} />
 
       <OrbitControls
@@ -349,7 +280,7 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
         enableDamping
         dampingFactor={0.05}
         minDistance={6}
-        maxDistance={30}
+        maxDistance={80}
         minPolarAngle={0}
         maxPolarAngle={Math.PI / 2.2}
         target={GRID_MAP.target}

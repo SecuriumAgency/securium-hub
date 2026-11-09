@@ -1,67 +1,71 @@
 "use client";
 
 import { useMemo } from "react";
-import { useGLTF } from "@react-three/drei";
-import type { Vec3 } from "./hubGrid";
+import { Color, InstancedMesh, Matrix4, MeshStandardMaterial, PlaneGeometry } from "three";
+import { StaticKit, poseMatrix } from "./InstancedKit";
+import { COMMERCIALS, COMMERCIAL_MODELS, HOUSES, HOUSE_MODELS, LAMPS, PEOPLE, PLATES, ROADS, TREES, TREE_MODELS, type Placement } from "./village-layout";
 
-// Décor statique de la ville : lampadaires, poteaux électriques et parasols (en lieu d'arbres : les packs téléchargés
-// n'en contiennent pas). Modèles Kenney (licence CC0), copiés dans public/models/hub.
-// Échelle 1 pour le décor. Tout pied est posé à Y = 0. Aucun re-rendu : chaque modèle est cloné une fois.
-const LAMP = "/models/hub/roads/street-lamp.glb";
-const POLE = "/models/hub/roads/electricity-pole.glb";
-const PARASOL = "/models/hub/commercial/parasol.glb";
+// Village statique : routes, quartiers, immeubles, parcs, lampadaires et figurants. Tout est instancié : une pièce,
+// un appel de rendu. Échelles : décor et bâtiments à 1, humains à 0,45. Tout pied est à y = 0.
+// Les matrices sont calculées une fois, au chargement du module : aucune recomposition au fil des rendus React.
+const ROOT = "/models/hub";
 
-type Spot = { x: number; z: number; rotation?: number };
+const matricesOf = (items: Placement[], scale = 1) => items.map((item) => poseMatrix({ x: item.x, y: 0, z: item.z, rot: item.rot, scale }, new Matrix4()));
 
-// Trottoirs : lampadaires de part et d'autre de la route (z = ±1), évités les figurants de hubGrid.ts.
-const LAMPS: Spot[] = [
-  { x: -5, z: -1 },
-  { x: -1, z: -1 },
-  { x: 5, z: -1 },
-  { x: -5, z: 1 },
-  { x: 2, z: 1 },
-  { x: 6, z: 1 },
-];
+const STRAIGHT = matricesOf(ROADS.filter((piece) => piece.kind === "straight").map((piece) => ({ x: piece.x, z: piece.z, rot: piece.rot })));
+const CROSS = matricesOf(ROADS.filter((piece) => piece.kind === "cross").map((piece) => ({ x: piece.x, z: piece.z, rot: 0 })));
+const ENDS = matricesOf(ROADS.filter((piece) => piece.kind === "end").map((piece) => ({ x: piece.x, z: piece.z, rot: piece.rot })));
+const LAMP_MATRICES = matricesOf(LAMPS);
 
-const POLES: Spot[] = [
-  { x: -7, z: -1 },
-  { x: 7, z: 1 },
-];
+const HOUSE_MATRICES = Object.fromEntries(HOUSE_MODELS.map((model) => [model, matricesOf(HOUSES[model])]));
+const COMMERCIAL_MATRICES = Object.fromEntries(COMMERCIAL_MODELS.map((model) => [model, matricesOf(COMMERCIALS[model])]));
+const TREE_MATRICES = Object.fromEntries(TREE_MODELS.map((model) => [model, matricesOf(TREES[model])]));
+const PERSON_MODELS = ["male-a", "female-a", "male-b", "female-b", "male-c", "female-c"] as const;
+const PERSON_MATRICES = Object.fromEntries(PERSON_MODELS.map((model) => [model, matricesOf(PEOPLE.filter((person) => person.model === model), 0.45)]));
 
-// Devant la ville, à l'est du parc des animaux.
-const PARASOLS: Spot[] = [
-  { x: 2, z: 3 },
-  { x: 3, z: 4 },
-  { x: 5, z: 3 },
-];
-
-useGLTF.preload(LAMP);
-useGLTF.preload(POLE);
-useGLTF.preload(PARASOL);
-
-function Prop({ url, position, rotation = 0 }: { url: string; position: Vec3; rotation?: number }) {
-  const { scene } = useGLTF(url);
-  // Une copie par emplacement : le graphe de scène d'un modèle ne peut pas être partagé entre deux parents.
-  const copy = useMemo(() => scene.clone(), [scene]);
-  return <primitive object={copy} position={position} rotation={[0, rotation, 0]} scale={1} />;
+// Parcelles : une plaque colorée par case, sous les bâtiments. Une seule instance pour tout le plan.
+function Plates() {
+  const mesh = useMemo(() => {
+    const geometry = new PlaneGeometry(1, 1);
+    geometry.rotateX(-Math.PI / 2);
+    const material = new MeshStandardMaterial({ color: "#ffffff", roughness: 0.9 });
+    const instanced = new InstancedMesh(geometry, material, PLATES.length);
+    const matrix = new Matrix4();
+    const color = new Color();
+    PLATES.forEach((plate, index) => {
+      matrix.makeScale(plate.w, 1, plate.d);
+      matrix.setPosition(plate.x, 0.004, plate.z);
+      instanced.setMatrixAt(index, matrix);
+      instanced.setColorAt(index, color.set(plate.color));
+    });
+    instanced.instanceMatrix.needsUpdate = true;
+    if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true;
+    instanced.receiveShadow = true;
+    return instanced;
+  }, []);
+  return <primitive object={mesh} />;
 }
 
-function Row({ url, spots }: { url: string; spots: Spot[] }) {
-  return (
-    <>
-      {spots.map((spot) => (
-        <Prop key={`${url}-${spot.x}-${spot.z}`} url={url} position={[spot.x, 0, spot.z]} rotation={spot.rotation} />
-      ))}
-    </>
-  );
-}
-
-export function CityEnvironment() {
+export function CityEnvironment({ night = false }: { night?: boolean }) {
   return (
     <group>
-      <Row url={LAMP} spots={LAMPS} />
-      <Row url={POLE} spots={POLES} />
-      <Row url={PARASOL} spots={PARASOLS} />
+      <Plates />
+      <StaticKit url={`${ROOT}/roads/road-straight.glb`} matrices={STRAIGHT} />
+      <StaticKit url={`${ROOT}/roads/road-crossroad.glb`} matrices={CROSS} />
+      <StaticKit url={`${ROOT}/roads/road-end.glb`} matrices={ENDS} />
+      <StaticKit url={`${ROOT}/roads/street-lamp.glb`} matrices={LAMP_MATRICES} />
+      {HOUSE_MODELS.map((model) => (
+        <StaticKit key={model} url={`${ROOT}/suburban/${model}.glb`} matrices={HOUSE_MATRICES[model]} night={night} />
+      ))}
+      {COMMERCIAL_MODELS.map((model) => (
+        <StaticKit key={model} url={`${ROOT}/commercial/${model}.glb`} matrices={COMMERCIAL_MATRICES[model]} night={night} />
+      ))}
+      {TREE_MODELS.map((model) => (
+        <StaticKit key={model} url={`${ROOT}/suburban/${model}.glb`} matrices={TREE_MATRICES[model]} />
+      ))}
+      {PERSON_MODELS.map((model) => (
+        <StaticKit key={model} url={`${ROOT}/characters/character-${model}.glb`} matrices={PERSON_MATRICES[model]} />
+      ))}
     </group>
   );
 }

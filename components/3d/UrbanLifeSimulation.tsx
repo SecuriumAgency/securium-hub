@@ -1,200 +1,207 @@
 "use client";
 
-import { useRef, type ComponentProps, type ComponentType } from "react";
+import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import type { Group } from "three";
 import { useHubStore } from "@/store/useHubStore";
-import CharacterFemaleA from "./assets/CharacterFemaleA";
-import CharacterMaleA from "./assets/CharacterMaleA";
-import Sedan from "./assets/Sedan";
-import Taxi from "./assets/Taxi";
-import { GRID_MAP } from "./hubGrid";
+import { MovingKit, type Pose } from "./InstancedKit";
+import { GRAPH, NOC_NODES, PARKS, PERSON_MODELS } from "./village-layout";
 
-// Ville vivante : véhicules qui suivent le réseau routier et tournent aux carrefours, humains qui marchent entre les
-// bâtiments. Tout se joue dans useFrame, sur des refs : aucun état React n'est mis à jour à chaque image.
-// Échelles validées : véhicules 0,55, humains 0,45. Tout pied est posé à y = 0.
+// Ville vivante : véhicules sur le réseau de rues, humains qui marchent sur les trottoirs entre les carrefours,
+// animaux qui gambadent dans les parcs. Les états vivent dans des objets de simulation, pas dans l'état React : la
+// boucle d'images met à jour des poses, et les ensembles instanciés les recopient dans leurs matrices.
+// Échelles : véhicules 0,55, humains 0,45, animaux 0,08. Tout pied est à y = 0.
 
-type GroupProps = ComponentProps<"group">;
-type NodeId = "west" | "east" | "center" | "north" | "south";
+const CAR_MODELS = ["taxi", "sedan", "van", "suv", "hatchback-sports"] as const;
+const PET_MODELS = ["cat", "dog", "bunny", "beaver", "chick", "penguin"] as const;
+const CAR_COUNT = 30;
+const WALKER_COUNT = 40;
+const PET_COUNT = 6;
 
-// Réseau routier : le carrefour central, les deux bouts de l'axe, et les deux culs-de-sac nord et sud.
-const { z: roadZ, from, to, cross } = GRID_MAP.roads;
-const NODES: Record<NodeId, { x: number; z: number }> = {
-  west: { x: from, z: roadZ },
-  east: { x: to, z: roadZ },
-  center: { x: cross.x, z: roadZ },
-  north: { x: cross.x, z: cross.north },
-  south: { x: cross.x, z: cross.south },
-};
-
-// Voisins de chaque nœud. Un cul-de-sac n'a qu'un voisin : le véhicule y fait demi-tour.
-const EDGES: Record<NodeId, NodeId[]> = {
-  west: ["center"],
-  east: ["center"],
-  center: ["west", "east", "north", "south"],
-  north: ["center"],
-  south: ["center"],
-};
-
-// Véhicules : taxis et berline du Car Kit. Ils roulent à droite, à 0,25 de l'axe, et ralentissent la nuit.
-const VEHICLE_SCALE = 0.55;
-const VEHICLE_SPEED_DAY = 1.2;
-const VEHICLE_SPEED_NIGHT = 0.5;
-const LANE_OFFSET = 0.25;
-const VEHICLES: { Model: ComponentType<GroupProps>; start: NodeId }[] = [
-  { Model: Taxi, start: "west" },
-  { Model: Sedan, start: "center" },
-  { Model: Taxi, start: "east" },
-];
-
-// Humains : posés sur les trottoirs, devant les bâtiments. Ils marquent une pause à chaque arrivée, plus longue la nuit.
+const CAR_SCALE = 0.55;
 const WALK_SCALE = 0.45;
-const WALK_SPEED_DAY = 0.8;
-const WALK_SPEED_NIGHT = 0.4;
-const PAUSE_DAY: [number, number] = [1.5, 4];
-const PAUSE_NIGHT: [number, number] = [4, 8];
+const PET_SCALE = 0.08;
+const CAR_LANE = 0.25;
+const WALK_LANE = 0.8;
+const CAR_SPEED: [number, number] = [1.2, 0.5]; // [jour, nuit]
+const WALK_SPEED: [number, number] = [0.8, 0.4];
+const PET_SPEED: [number, number] = [0.5, 0.2];
 
-// Portes : points de passage sur les trottoirs. `buildingId` relie la porte à son bâtiment, pour l'alerte.
-type Door = { x: number; z: number; buildingId: string | null };
-const DOORS: Door[] = [
-  { x: -4, z: -1, buildingId: "immeuble-a-rue" },
-  { x: -2, z: -1, buildingId: "immeuble-c-rue" },
-  { x: 2.1, z: -1, buildingId: GRID_MAP.shopSite.id },
-  { x: 5.5, z: -1, buildingId: "immeuble-a-rue-2" },
-  { x: -3, z: 1, buildingId: null },
-  { x: -1, z: 1, buildingId: null },
-  { x: 4, z: 1, buildingId: null },
-];
-const WALKERS: { Model: ComponentType<GroupProps>; startDoor: number }[] = [
-  { Model: CharacterMaleA, startDoor: 0 },
-  { Model: CharacterFemaleA, startDoor: 2 },
-  { Model: CharacterMaleA, startDoor: 4 },
-  { Model: CharacterFemaleA, startDoor: 6 },
-];
+type Agent = { from: string; to: string; t: number; wait: number };
 
+const NO_FORBIDDEN = new Set<string>();
 const isNight = () => useHubStore.getState().timeOfDay === "nuit";
-const randomBetween = ([min, max]: [number, number]) => min + Math.random() * (max - min);
+const between = (min: number, max: number) => min + Math.random() * (max - min);
+const pickOf = <T,>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)];
 
-// Alerte : un bâtiment dont le site est hors ligne ou en maintenance n'attire plus les humains, et ceux qui s'en
-// approchent s'arrêtent sur place. Un bâtiment sans site n'alerte pas.
-function isAlert(buildingId: string | null): boolean {
-  if (!buildingId) return false;
-  const site = useHubStore.getState().sitesNetwork.find((item) => item.id === buildingId);
-  return site !== undefined && site.status !== "online";
+// Nœuds de l'alerte : ceux des bâtiments dont le site est hors ligne ou en maintenance.
+function alertNodes(): Set<string> {
+  const alerts = new Set<string>();
+  for (const site of useHubStore.getState().sitesNetwork) {
+    if (site.status !== "online" && NOC_NODES[site.id]) alerts.add(NOC_NODES[site.id]);
+  }
+  return alerts;
 }
 
-// Nœud suivant : au carrefour, un virage au hasard parmi les autres branches ; au cul-de-sac, demi-tour.
-function nextNode(current: NodeId, previous: NodeId | null): NodeId {
-  const options = EDGES[current];
-  if (options.length === 1) return options[0];
-  const others = options.filter((node) => node !== previous);
-  return others[Math.floor(Math.random() * others.length)];
+// Voisin suivant : au carrefour, un virage au hasard ; au cul-de-sac, demi-tour. Les nœuds en alerte sont évités.
+function chooseNext(node: string, previous: string, forbidden: Set<string>): string | null {
+  const allowed = (GRAPH.edges[node] ?? []).filter((next) => !forbidden.has(next));
+  const forward = allowed.filter((next) => next !== previous);
+  const pool = forward.length ? forward : allowed;
+  return pool.length ? pickOf(pool) : null;
 }
 
-// Un véhicule parcourt le réseau nœud après nœud. Son état vit dans une ref, mis à jour à chaque image.
-function Vehicle({ Model, start }: { Model: ComponentType<GroupProps>; start: NodeId }) {
-  const group = useRef<Group>(null);
-  const leg = useRef({ from: start, to: nextNode(start, null), t: Math.random() * 0.5 });
+// Arrivée à un nœud : l'agent repart vers un voisin, et marque parfois une pause (humains).
+function arrive(agent: Agent, forbidden: Set<string>, pause: [number, number] | null): boolean {
+  const previous = agent.from;
+  const node = agent.to;
+  agent.from = node;
+  agent.t = 0;
+  const next = chooseNext(node, previous, forbidden);
+  if (next === null) {
+    agent.to = node;
+    agent.wait = 1;
+    return false;
+  }
+  agent.to = next;
+  if (pause && Math.random() < 0.35) agent.wait = between(pause[0], pause[1]);
+  return true;
+}
 
-  useFrame((_, delta) => {
-    const car = group.current;
-    if (!car) return;
-    const state = leg.current;
-    let remaining = (isNight() ? VEHICLE_SPEED_NIGHT : VEHICLE_SPEED_DAY) * delta;
-
-    // Avance la distance de la frame, en changeant de tronçon à chaque nœud atteint.
-    while (remaining > 0) {
-      const a = NODES[state.from];
-      const b = NODES[state.to];
-      const length = Math.hypot(b.x - a.x, b.z - a.z);
-      const left = (1 - state.t) * length;
-      if (remaining < left) {
-        state.t += remaining / length;
-        remaining = 0;
-      } else {
-        remaining -= left;
-        const previous = state.from;
-        state.from = state.to;
-        state.to = nextNode(state.to, previous);
-        state.t = 0;
-      }
+// Fait avancer l'agent de `distance` le long du réseau, en changeant de tronçon à chaque nœud atteint.
+function advance(agent: Agent, distance: number, forbidden: Set<string>, pause: [number, number] | null) {
+  let remaining = distance;
+  while (remaining > 0) {
+    const a = GRAPH.nodes[agent.from];
+    const b = GRAPH.nodes[agent.to];
+    const length = Math.hypot(b.x - a.x, b.z - a.z) || 1e-6;
+    const left = (1 - agent.t) * length;
+    if (remaining < left) {
+      agent.t += remaining / length;
+      return;
     }
+    remaining -= left;
+    if (!arrive(agent, forbidden, pause) || agent.wait > 0) return;
+  }
+}
 
-    // Position sur le tronçon, décalée sur la voie de droite. Le modèle regarde vers +z : son cap suit le sens de marche.
-    const a = NODES[state.from];
-    const b = NODES[state.to];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const length = Math.hypot(dx, dz) || 1;
-    const ux = dx / length;
-    const uz = dz / length;
-    car.position.set(a.x + dx * state.t - uz * LANE_OFFSET, 0, a.z + dz * state.t + ux * LANE_OFFSET);
-    car.rotation.y = Math.atan2(ux, uz);
+// Position sur le tronçon, décalée de `lane` vers la droite du sens de marche. Le modèle regarde vers +z.
+function place(agent: Agent, pose: Pose, lane: number) {
+  const a = GRAPH.nodes[agent.from];
+  const b = GRAPH.nodes[agent.to];
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const length = Math.hypot(dx, dz) || 1;
+  const ux = dx / length;
+  const uz = dz / length;
+  pose.x = a.x + dx * agent.t - uz * lane;
+  pose.z = a.z + dz * agent.t + ux * lane;
+  pose.rot = Math.atan2(ux, uz);
+}
+
+const NODE_KEYS = Object.keys(GRAPH.nodes);
+const startAgent = (): Agent => {
+  const from = pickOf(NODE_KEYS);
+  const to = pickOf(GRAPH.edges[from]);
+  return { from, to, t: Math.random(), wait: 0 };
+};
+
+type Simulation = {
+  update: (dt: number) => void;
+  cars: Record<string, Pose[]>;
+  walkers: Record<string, Pose[]>;
+  pets: Record<string, Pose[]>;
+};
+
+function createSimulation(): Simulation {
+  const cars = Array.from({ length: CAR_COUNT }, (_, index) => ({
+    model: CAR_MODELS[index % CAR_MODELS.length],
+    agent: startAgent(),
+    pose: { x: 0, y: 0, z: 0, rot: 0, scale: CAR_SCALE },
+  }));
+  const walkers = Array.from({ length: WALKER_COUNT }, (_, index) => ({
+    model: PERSON_MODELS[index % PERSON_MODELS.length],
+    agent: startAgent(),
+    pose: { x: 0, y: 0, z: 0, rot: 0, scale: WALK_SCALE },
+  }));
+  const parkCentres = Array.from({ length: PET_COUNT }, () => pickOf(PARKS));
+  const pets = Array.from({ length: PET_COUNT }, (_, index) => {
+    const centre = parkCentres[index];
+    return {
+      model: PET_MODELS[index % PET_MODELS.length],
+      centre,
+      target: { x: centre[0], z: centre[2] },
+      wait: Math.random() * 3,
+      pose: { x: centre[0], y: 0, z: centre[2], rot: 0, scale: PET_SCALE },
+    };
   });
 
-  return (
-    <group ref={group} scale={VEHICLE_SCALE}>
-      <Model />
-    </group>
-  );
-}
+  for (const car of cars) place(car.agent, car.pose, CAR_LANE);
+  for (const walker of walkers) place(walker.agent, walker.pose, WALK_LANE);
 
-// Choisit la prochaine porte : une autre que la courante, et jamais un bâtiment en alerte. Sans choix possible, le
-// humain reste sur place.
-function pickDoor(current: Door): Door {
-  const candidates = DOORS.filter((door) => door !== current && !isAlert(door.buildingId));
-  return candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : current;
-}
+  const groupBy = (items: { model: string; pose: Pose }[]) => {
+    const groups: Record<string, Pose[]> = {};
+    for (const item of items) (groups[item.model] ??= []).push(item.pose);
+    return groups;
+  };
 
-// Un humain marche en ligne droite d'une porte à l'autre, puis fait une pause. Son état vit dans une ref.
-function Walker({ Model, startDoor }: { Model: ComponentType<GroupProps>; startDoor: number }) {
-  const group = useRef<Group>(null);
-  const start = DOORS[startDoor];
-  const walk = useRef({ x: start.x, z: start.z, target: start, pause: Math.random() * 3 });
-
-  useFrame((_, delta) => {
-    const person = group.current;
-    if (!person) return;
-    const state = walk.current;
-
-    if (state.pause > 0) {
-      state.pause -= delta;
-    } else if (!isAlert(state.target.buildingId)) {
-      const dx = state.target.x - state.x;
-      const dz = state.target.z - state.z;
-      const distance = Math.hypot(dx, dz);
-      const step = (isNight() ? WALK_SPEED_NIGHT : WALK_SPEED_DAY) * delta;
-      if (distance <= step) {
-        state.x = state.target.x;
-        state.z = state.target.z;
-        state.target = pickDoor(state.target);
-        state.pause = randomBetween(isNight() ? PAUSE_NIGHT : PAUSE_DAY);
-      } else {
-        state.x += (dx / distance) * step;
-        state.z += (dz / distance) * step;
-        person.rotation.y = Math.atan2(dx, dz);
+  return {
+    cars: groupBy(cars),
+    walkers: groupBy(walkers),
+    pets: groupBy(pets),
+    update(dt: number) {
+      const night = isNight();
+      const forbidden = alertNodes();
+      for (const car of cars) {
+        advance(car.agent, (night ? CAR_SPEED[1] : CAR_SPEED[0]) * dt, NO_FORBIDDEN, null);
+        place(car.agent, car.pose, CAR_LANE);
       }
-    }
-    // Un bâtiment en alerte est une cible gelée : le humain reste sur place jusqu'au retour à la normale.
-    person.position.set(state.x, 0, state.z);
-  });
-
-  return (
-    <group ref={group} scale={WALK_SCALE}>
-      <Model />
-    </group>
-  );
+      for (const walker of walkers) {
+        if (walker.agent.wait > 0) {
+          walker.agent.wait -= dt;
+        } else {
+          advance(walker.agent, (night ? WALK_SPEED[1] : WALK_SPEED[0]) * dt, forbidden, night ? [3, 6] : [1, 3]);
+        }
+        place(walker.agent, walker.pose, WALK_LANE);
+      }
+      for (const pet of pets) {
+        if (pet.wait > 0) {
+          pet.wait -= dt;
+          continue;
+        }
+        const dx = pet.target.x - pet.pose.x;
+        const dz = pet.target.z - pet.pose.z;
+        const distance = Math.hypot(dx, dz);
+        const step = (night ? PET_SPEED[1] : PET_SPEED[0]) * dt;
+        if (distance <= step) {
+          pet.pose.x = pet.target.x;
+          pet.pose.z = pet.target.z;
+          pet.wait = between(2, 5);
+          // Nouvelle cible dans le parc, à l'intérieur de la case (loin des rues).
+          pet.target = { x: pet.centre[0] + between(-2.5, 2.5), z: pet.centre[2] + between(-2.5, 2.5) };
+        } else {
+          pet.pose.x += (dx / distance) * step;
+          pet.pose.z += (dz / distance) * step;
+          pet.pose.rot = Math.atan2(dx, dz);
+        }
+      }
+    },
+  };
 }
 
-// Entités animées de la ville : véhicules et humains. Montée dans le Canvas, sans état React.
 export function UrbanLifeSimulation() {
+  const sim = useMemo(() => createSimulation(), []);
+  useFrame((_, delta) => sim.update(Math.min(delta, 0.05)));
+
   return (
     <group>
-      {VEHICLES.map((vehicle, index) => (
-        <Vehicle key={`vehicle-${index}`} Model={vehicle.Model} start={vehicle.start} />
+      {CAR_MODELS.map((model) => (
+        <MovingKit key={model} url={`/models/hub/cars/${model}.glb`} poses={sim.cars[model] ?? []} />
       ))}
-      {WALKERS.map((walker, index) => (
-        <Walker key={`walker-${index}`} Model={walker.Model} startDoor={walker.startDoor} />
+      {PERSON_MODELS.map((model) => (
+        <MovingKit key={model} url={`/models/hub/characters/character-${model}.glb`} poses={sim.walkers[model] ?? []} />
+      ))}
+      {PET_MODELS.map((model) => (
+        <MovingKit key={model} url={`/models/hub/pets/animal-${model}.glb`} poses={sim.pets[model] ?? []} />
       ))}
     </group>
   );
