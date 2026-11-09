@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { create } from "zustand";
-import { GRID_MAP } from "@/components/3d/hubGrid";
+import { GRID_MAP, SITE_MAPPING } from "@/components/3d/hubGrid";
 
 // État du hub 3D : moment de la journée (éclairage), état du réseau multi-sites, sites et bâtiment survolé.
 export type TimeOfDay = "jour" | "nuit";
@@ -25,7 +25,7 @@ const FLEET_TO_HUB: Record<FleetSite["status"], SiteStatus> = { online: "online"
 
 // Bâtiments du plan et leur site. La boutique n'est rattachée à aucun site.
 const PLAN_SITES: { id: string; label: string; siteId?: string }[] = [
-  ...GRID_MAP.buildings.map((building) => ({ id: building.id, label: building.label, siteId: building.siteId })),
+  ...GRID_MAP.buildings.map((building) => ({ id: building.id, label: building.label, siteId: SITE_MAPPING[building.id] })),
   { id: GRID_MAP.shopSite.id, label: GRID_MAP.shopSite.label },
 ];
 

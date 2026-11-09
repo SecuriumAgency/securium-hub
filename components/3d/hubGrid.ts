@@ -2,6 +2,17 @@
 // Rien n'est posé en [0, 0, 0] : chaque objet a sa case réservée et les rangées ne se chevauchent pas.
 // Le socle couvre x de -8 à 8 et z de -6 à 6. Axes : x horizontal, z vers l'avant (la route est sur z = 0).
 
+// Affectation bâtiment → site du réseau : clé = identifiant du bâtiment dans GRID_MAP.buildings, valeur = identifiant
+// du site dans lib/mock-data.json. Un bâtiment absent de cette table n'a pas de site : son statut reste inconnu.
+// Affectations à valider : elles ne sont qu'une donnée d'affichage, à modifier ici sans toucher à la logique.
+export const SITE_MAPPING: Readonly<Record<string, string>> = {
+  "immeuble-a-rue": "securium-agency",
+  "immeuble-c-rue": "securium-labs",
+  "immeuble-a-rue-2": "elite-depannage-34",
+  "immeuble-c-fond": "rescue-247-uk",
+  "immeuble-a-fond": "geoenergy-habitat",
+};
+
 export type Vec3 = [number, number, number];
 
 export type BuildingModel = "building-a" | "building-c";
@@ -20,9 +31,8 @@ export type Placement<Model extends string> = {
   lift?: number;
 };
 
-// Bâtiment commercial cliquable : son libellé (infobulle), la page d'administration qu'il ouvre, et le site
-// du réseau qu'il représente (identifiant de lib/mock-data.json, facultatif : sans site, son statut reste inconnu).
-export type BuildingPlacement = Placement<BuildingModel> & { label: string; href: string; siteId?: string };
+// Bâtiment commercial cliquable : son libellé (infobulle) et la page d'administration qu'il ouvre.
+export type BuildingPlacement = Placement<BuildingModel> & { label: string; href: string };
 
 export const GRID_MAP = {
   tile: 1,
@@ -38,12 +48,11 @@ export const GRID_MAP = {
   // Rangée avant (z = -2), face à la route ; rangée arrière (z = -4), derrière.
   // Chaque immeuble ouvre une page d'administration existante.
   buildings: [
-    // Affectation site → bâtiment : à valider, c'est une simple donnée d'affichage.
-    { id: "immeuble-a-rue", label: "Parc Sites", href: "/admin/fleet", model: "building-a", x: -4, z: -2, rotation: 0, siteId: "securium-agency" },
-    { id: "immeuble-c-rue", label: "Lead Broker", href: "/admin/broker", model: "building-c", x: -2, z: -2, rotation: 0, siteId: "securium-labs" },
-    { id: "immeuble-a-rue-2", label: "Prospection", href: "/admin/outreach", model: "building-a", x: 5.5, z: -2, rotation: 0, siteId: "elite-depannage-34" },
-    { id: "immeuble-c-fond", label: "Matchmaker", href: "/admin/broker/matchmaker", model: "building-c", x: -3, z: -4, rotation: 0, siteId: "rescue-247-uk" },
-    { id: "immeuble-a-fond", label: "Audit SEO", href: "/admin/seo", model: "building-a", x: 0, z: -4, rotation: 0, siteId: "geoenergy-habitat" },
+    { id: "immeuble-a-rue", label: "Parc Sites", href: "/admin/fleet", model: "building-a", x: -4, z: -2, rotation: 0 },
+    { id: "immeuble-c-rue", label: "Lead Broker", href: "/admin/broker", model: "building-c", x: -2, z: -2, rotation: 0 },
+    { id: "immeuble-a-rue-2", label: "Prospection", href: "/admin/outreach", model: "building-a", x: 5.5, z: -2, rotation: 0 },
+    { id: "immeuble-c-fond", label: "Matchmaker", href: "/admin/broker/matchmaker", model: "building-c", x: -3, z: -4, rotation: 0 },
+    { id: "immeuble-a-fond", label: "Audit SEO", href: "/admin/seo", model: "building-a", x: 0, z: -4, rotation: 0 },
     { id: "immeuble-c-fond-2", label: "Rapports", href: "/admin/reports", model: "building-c", x: 3.5, z: -4, rotation: 0 },
   ] as BuildingPlacement[],
   // Boutique (Mini Shop) : sol, vitrine et frigo, dans la rangée avant, à l'est des immeubles.
