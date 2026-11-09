@@ -43,19 +43,9 @@ const LIGHTS: Record<
 // HDRI locale, téléchargée par scripts/fetch-hub-env.mjs. Sans ce fichier, la scène n'appelle aucun CDN.
 const HDRI_URL = "/models/env/city.hdr";
 
-// Reflets d'environnement : la HDRI locale si elle existe, sinon un éclairage de remplissage qui suit l'heure.
-// Le test se fait en HEAD, sans suivre de redirection : un visiteur sans session obtient « absent ».
-function EnvironmentLight({ timeOfDay }: { timeOfDay: TimeOfDay }) {
-  const [hdri, setHdri] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(HDRI_URL, { method: "HEAD", redirect: "error", signal: controller.signal })
-      .then((response) => setHdri(response.ok))
-      .catch(() => setHdri(false));
-    return () => controller.abort();
-  }, []);
-
+// Reflets d'environnement : la HDRI locale si le fichier existait au build (décidé par app/hub/page.tsx),
+// sinon un éclairage de remplissage qui suit l'heure. Aucune requête réseau à l'exécution.
+function EnvironmentLight({ timeOfDay, hdri }: { timeOfDay: TimeOfDay; hdri: boolean }) {
   if (hdri) return <Environment files={HDRI_URL} />;
   const light = LIGHTS[timeOfDay];
   return <hemisphereLight color={light.sky} groundColor={light.ground} intensity={light.hemisphere} />;
@@ -182,13 +172,14 @@ function ViewReset() {
 }
 
 // Scène du hub : éclairage selon l'heure, socle ardoise, diorama sur le plan et contrôles de caméra.
-export function HubScene() {
+export function HubScene({ hdri = false }: { hdri?: boolean }) {
   const timeOfDay = useHubStore((state) => state.timeOfDay);
   const light = LIGHTS[timeOfDay];
   const { position, fov } = GRID_MAP.camera;
 
+  // shadows="percentage" : PCFSoftShadowMap a été retiré de three r186 (avertissement en console).
   return (
-    <Canvas shadows dpr={[1, 2]} camera={{ position, fov }}>
+    <Canvas shadows="percentage" dpr={[1, 2]} camera={{ position, fov }}>
       <color attach="background" args={[light.background]} />
       <ambientLight color={light.ambient} intensity={light.ambientIntensity} />
       <directionalLight
@@ -203,7 +194,7 @@ export function HubScene() {
         shadow-camera-top={20}
         shadow-camera-bottom={-20}
       />
-      <EnvironmentLight timeOfDay={timeOfDay} />
+      <EnvironmentLight timeOfDay={timeOfDay} hdri={hdri} />
 
       <DioramaIsland />
       <Diorama />
