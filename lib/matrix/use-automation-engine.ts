@@ -1,22 +1,24 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { EcosystemMetrics } from "@/lib/matrix/metrics";
 import { startPolling } from "@/lib/poll";
 import { useMatrixStore, type PendingTask } from "@/store/useMatrixStore";
 
 const POLL_INTERVAL_MS = 15_000;
+const METRICS_INTERVAL_MS = 30_000;
 
-// Moteur headless : interroge les tâches de l'Orchestrateur, met à jour le store et laisse le store décider
-// des réparations. Les alertes déjà présentes au chargement de la page sont journalisées sans relancer de
-// réparation : un simple rechargement ne doit pas redéclencher les workflows.
+// Moteur headless : interroge les tâches de l'Orchestrateur et les métriques réelles, met à jour le store et
+// laisse le store décider des réparations. Les alertes déjà présentes au chargement de la page sont journalisées
+// sans relancer de réparation : un simple rechargement ne doit pas redéclencher les workflows.
 export function useAutomationEngine() {
   const seen = useRef<Set<string>>(new Set());
   const primed = useRef(false);
 
   useEffect(() => {
-    useMatrixStore.getState().log("info", null, "Moteur d'automatisation démarré : /api/tasks/pending interrogé toutes les 15 s.");
+    useMatrixStore.getState().log("info", null, "Moteur d'automatisation démarré : tâches toutes les 15 s, métriques toutes les 30 s.");
 
-    return startPolling<{ tasks: PendingTask[] }>(
+    const stopTasks = startPolling<{ tasks: PendingTask[] }>(
       "/api/tasks/pending",
       POLL_INTERVAL_MS,
       ({ tasks }) => {
@@ -41,5 +43,17 @@ export function useAutomationEngine() {
       },
       () => useMatrixStore.getState().log("warning", null, "Lecture des tâches impossible : nouvelle tentative au prochain cycle."),
     );
+
+    const stopMetrics = startPolling<EcosystemMetrics>(
+      "/api/ecosystem/metrics",
+      METRICS_INTERVAL_MS,
+      (metrics) => useMatrixStore.getState().setMetrics(metrics),
+      () => useMatrixStore.getState().failMetrics(),
+    );
+
+    return () => {
+      stopTasks();
+      stopMetrics();
+    };
   }, []);
 }

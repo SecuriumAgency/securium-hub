@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ExternalLink, X } from "lucide-react";
 import { repairFor } from "@/lib/matrix/repairs";
+import { metricRows } from "@/lib/matrix/metrics";
 import { MATRIX_SITES, MATRIX_TOOLS, ZONES } from "@/lib/matrix/tools";
 import { formatNumber } from "@/lib/sites";
 import { nodeStatus, useMatrixStore, type NodeStatus } from "@/store/useMatrixStore";
@@ -38,6 +39,8 @@ export function MatrixHud() {
   const setAutopilot = useMatrixStore((state) => state.setAutopilot);
   const dispatchAgent = useMatrixStore((state) => state.dispatchAgent);
   const logs = useMatrixStore((state) => state.logs);
+  const metrics = useMatrixStore((state) => state.metrics);
+  const metricsFailed = useMatrixStore((state) => state.metricsFailed);
 
   if (!selectedId) return null;
   const tool = MATRIX_TOOLS.find((item) => item.id === selectedId);
@@ -47,6 +50,7 @@ export function MatrixHud() {
   const title = tool?.label ?? site?.label ?? selectedId;
   const scoped = logs.filter((entry) => entry.scope === selectedId).slice(-4);
   const repair = site ? repairFor(site.id) : null;
+  const rows = metrics ? metricRows(selectedId, Boolean(site), metrics) : [];
 
   return (
     <aside
@@ -102,6 +106,33 @@ export function MatrixHud() {
           </div>
         </dl>
       )}
+
+      <section aria-label="Métriques en direct" className="mt-5">
+        <h3 className="text-[11px] uppercase tracking-wider text-slate-400">Métriques en direct</h3>
+        {rows.length > 0 ? (
+          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            {rows.map((row) => (
+              <div key={row.label} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <dt className="text-[11px] text-slate-400">{row.label}</dt>
+                <dd className="mt-1 font-semibold tabular-nums text-white">{formatNumber(row.value)}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="mt-2 text-xs text-slate-500">
+            {metricsFailed
+              ? "Métriques indisponibles : base injoignable ou session expirée."
+              : metrics
+                ? "Aucune métrique reliée à ce module."
+                : "Première lecture des métriques en cours…"}
+          </p>
+        )}
+        {metrics && (
+          <p className="mt-2 text-[11px] text-slate-500">
+            Base de production · relevé à {new Date(metrics.generatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </p>
+        )}
+      </section>
 
       <section aria-label="Journal de l'agent" className="mt-5">
         <h3 className="text-[11px] uppercase tracking-wider text-slate-400">Félix Fix · activité</h3>

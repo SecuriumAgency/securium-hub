@@ -11,7 +11,7 @@ import { useMatrixStore, type MatrixState } from "@/store/useMatrixStore";
 const PER_FLOW = 5;
 const ARC_HEIGHT = 0.9;
 
-type FlowKind = "outreach" | "lead" | "repair";
+type FlowKind = "outreach" | "lead" | "broker" | "repair";
 type FlowDef = { kind: FlowKind; from: string; to: string; siteId?: string; color: string };
 
 const FLOWS: FlowDef[] = [
@@ -23,13 +23,15 @@ const FLOWS: FlowDef[] = [
   { kind: "lead", from: "matchmaker", to: "geoenergy-habitat", siteId: "geoenergy-habitat", color: "#34d399" },
   { kind: "lead", from: "matchmaker", to: "elite-depannage-34", siteId: "elite-depannage-34", color: "#34d399" },
   { kind: "lead", from: "matchmaker", to: "rescue-247-uk", siteId: "rescue-247-uk", color: "#34d399" },
+  // Le Lead Broker vend les leads captés vers le Parc Sites.
+  { kind: "broker", from: "lead-broker", to: "parc-sites", color: "#c084fc" },
   // Félix Fix : l'Escadron relaie vers la tour centrale, qui envoie l'essaim vers le site ciblé.
   { kind: "repair", from: "escadron", to: "securium-os", color: "#fbbf24" },
   { kind: "repair", from: "securium-os", to: "geoenergy-habitat", siteId: "geoenergy-habitat", color: "#fb923c" },
   { kind: "repair", from: "securium-os", to: "elite-depannage-34", siteId: "elite-depannage-34", color: "#fb923c" },
 ];
 
-const SIZE: Record<FlowKind, number> = { outreach: 0.09, lead: 0.1, repair: 0.15 };
+const SIZE: Record<FlowKind, number> = { outreach: 0.09, lead: 0.1, broker: 0.1, repair: 0.15 };
 
 function arc(from: string, to: string): QuadraticBezierCurve3 {
   const a = nodePosition(from) ?? [0, 0, 0];
@@ -48,7 +50,14 @@ function activity(flow: FlowDef, state: MatrixState): { active: boolean; count: 
     return { active: true, count: Math.min(PER_FLOW, 1 + pending), speed: 0.12 + Math.min(pending, 8) * 0.03 };
   }
   if (flow.kind === "lead") {
-    return { active: true, count: Math.min(PER_FLOW, 1 + Math.floor(pending / 2)), speed: 0.1 + Math.min(pending, 8) * 0.02 };
+    // Leads reçus aujourd'hui par le site destinataire : plus il y en a, plus les particules sont nombreuses et rapides.
+    const leads = flow.siteId ? (state.metrics?.leads.todayBySite[flow.siteId] ?? 0) : (state.metrics?.leads.today ?? 0);
+    return { active: true, count: Math.min(PER_FLOW, 1 + leads), speed: 0.12 + Math.min(leads, 10) * 0.04 };
+  }
+  if (flow.kind === "broker") {
+    // Leads captés aujourd'hui par le Lead Broker : le flux vers le Parc Sites accélère avec eux.
+    const captured = state.metrics?.capturedLeads.today ?? 0;
+    return { active: true, count: Math.min(PER_FLOW, 1 + captured), speed: 0.12 + Math.min(captured, 10) * 0.04 };
   }
   const busy = flow.siteId
     ? Boolean(state.sites[flow.siteId]?.repairing)

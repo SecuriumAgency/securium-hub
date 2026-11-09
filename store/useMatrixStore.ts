@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { repairFor } from "@/lib/matrix/repairs";
+import type { EcosystemMetrics } from "@/lib/matrix/metrics";
 import { MATRIX_TOOLS, resolveSiteId, siteName } from "@/lib/matrix/tools";
 import type { Site, SiteStatus } from "@/lib/sites";
 
@@ -34,10 +35,15 @@ export type MatrixState = {
   pendingBySite: Record<string, number>;
   sites: Record<string, SiteRuntime>;
   logs: MatrixLog[];
+  // Métriques réelles (base de production), actualisées toutes les 30 s par le moteur.
+  metrics: EcosystemMetrics | null;
+  metricsFailed: boolean;
   select: (id: string | null) => void;
   setAutopilot: (enabled: boolean) => void;
   setFleet: (sites: Site[]) => void;
   setPending: (tasks: PendingTask[]) => void;
+  setMetrics: (metrics: EcosystemMetrics) => void;
+  failMetrics: () => void;
   log: (level: LogLevel, scope: string | null, message: string) => void;
   onAlertDetected: (task: PendingTask) => void;
   dispatchAgent: (siteId: string) => Promise<void>;
@@ -55,8 +61,22 @@ export const useMatrixStore = create<MatrixState>()((set, get) => ({
   pendingBySite: {},
   sites: {},
   logs: [],
+  metrics: null,
+  metricsFailed: false,
 
   select: (id) => set({ selectedId: id }),
+
+  setMetrics: (metrics) => {
+    const previous = get().metrics;
+    set({ metrics, metricsFailed: false });
+    // Nouveaux leads depuis le dernier relevé : le journal le signale, la scène reste silencieuse.
+    const gained = previous ? metrics.leads.today - previous.leads.today : 0;
+    if (gained > 0) {
+      get().log("success", null, `+${gained} lead(s) reçu(s) aujourd'hui · ${metrics.leads.today} au total du jour`);
+    }
+  },
+
+  failMetrics: () => set({ metricsFailed: true }),
 
   setAutopilot: (enabled) => {
     set({ autopilot: enabled });
