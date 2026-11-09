@@ -34,7 +34,7 @@ const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? "
 
 // Supervision des agents de Securium-OS, posée à gauche par-dessus la scène, hors du <Canvas>.
 // Abonné au store de télémétrie (alimenté par Home) : une actualisation ne re-rend que ses abonnés.
-export function AgentsPanel() {
+export function AgentsPanel({ embedded = false }: { embedded?: boolean }) {
   const { data, failed } = useTelemetry();
   const [open, setOpen] = useState(true);
   // Rapport périmé : on ne sait plus ce qui tourne, pas de compte.
@@ -44,7 +44,11 @@ export function AgentsPanel() {
   return (
     <section
       aria-label="Supervision des agents"
-      className="absolute top-24 left-4 z-[45] flex max-h-[calc(100dvh-9rem)] w-72 flex-col rounded-2xl border border-white/10 bg-slate-900/50 text-slate-100 shadow-2xl shadow-black/40 backdrop-blur-xl sm:top-28 sm:left-6 sm:max-h-[calc(100dvh-10rem)]"
+      className={
+        embedded
+          ? "flex min-h-0 flex-1 flex-col text-slate-100"
+          : "absolute top-24 left-4 z-[45] flex max-h-[calc(100dvh-9rem)] w-72 flex-col rounded-2xl border border-white/10 bg-slate-900/50 text-slate-100 shadow-2xl shadow-black/40 backdrop-blur-xl sm:top-28 sm:left-6 sm:max-h-[calc(100dvh-10rem)]"
+      }
     >
       <button
         type="button"
