@@ -26,7 +26,7 @@ function useLocalClock() {
   return now;
 }
 
-export function HubView() {
+export function HubView({ hdri = false }: { hdri?: boolean }) {
   useHubClock();
   const now = useLocalClock();
   const timeOfDay = useHubStore((state) => state.timeOfDay);
@@ -38,7 +38,7 @@ export function HubView() {
 
   return (
     <div className="relative h-[600px] w-full overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
-      <HubScene />
+      <HubScene hdri={hdri} />
 
       <div className="pointer-events-none absolute left-4 top-4 z-10">
         <span className={`${GLASS} text-slate-200`}>Securium Hub 3D - Live Preview</span>
