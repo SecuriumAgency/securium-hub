@@ -12,7 +12,7 @@ import { formatNumber } from "@/lib/sites";
 import { useFleet } from "@/lib/use-fleet";
 import { useMatrixStore } from "@/store/useMatrixStore";
 import { CityGrid } from "./CityGrid";
-import { DataFlows } from "./DataFlows";
+import { DataFlows, TrafficOrbits } from "./DataFlows";
 import { GlobalLogStream } from "./GlobalLogStream";
 import { MatrixHud } from "./MatrixHud";
 import { MatrixNode } from "./MatrixNode";
@@ -107,6 +107,7 @@ export function MatrixScene() {
 
         <CityGrid />
         <DataFlows />
+        <TrafficOrbits />
         <CameraRig />
         <OrbitControls
           makeDefault
