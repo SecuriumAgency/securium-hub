@@ -13,6 +13,11 @@ const HubScene = dynamic(() => import("./HubScene").then((module) => module.HubS
   loading: () => <HubLoader />,
 });
 
+// Barre latérale NOC : chargée avec la scène, jamais avant le clic.
+const NocSidebar = dynamic(() => import("@/components/hub/NocSidebar").then((module) => module.NocSidebar), {
+  ssr: false,
+});
+
 const GLASS = "rounded-full border border-slate-700/50 bg-slate-900/80 px-3 py-1 text-xs backdrop-blur-md";
 
 // Pastille et libellé par statut de site, pour l'infobulle.
@@ -97,7 +102,8 @@ function Placeholder({ onActivate }: { onActivate: () => void }) {
   );
 }
 
-// Surcouche HTML de la scène active : heure, statut, infobulle du bâtiment survolé, aide et réinitialisation.
+// Couche d'interface au-dessus de la scène : barre latérale NOC, infobulle, aide, heure et statut. Elle ne reçoit
+// pas les événements de souris (pointer-events-none) : le glisser pour faire tourner la ville passe à travers elle.
 // Montée seulement avec la scène, pour qu'aucune mise à jour ne tourne tant que la 3D n'est pas chargée.
 function HubOverlays({ containerRef }: { containerRef: RefObject<HTMLDivElement | null> }) {
   useHubClock();
@@ -116,12 +122,14 @@ function HubOverlays({ containerRef }: { containerRef: RefObject<HTMLDivElement 
   useTooltipFollower(containerRef, tooltipRef, Boolean(label));
 
   return (
-    <>
-      <div className="absolute right-4 top-4 z-10">
+    <div className="pointer-events-none relative z-10 flex h-full w-full">
+      <NocSidebar />
+
+      <div className="absolute right-4 top-4">
         <button
           type="button"
           onClick={resetView}
-          className="flex min-h-11 min-w-11 items-center gap-2 rounded-full border border-slate-700/50 bg-slate-900/80 px-4 text-xs text-slate-200 backdrop-blur-md transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+          className="pointer-events-auto flex min-h-11 min-w-11 items-center gap-2 rounded-full border border-slate-700/50 bg-slate-900/80 px-4 text-xs text-slate-200 backdrop-blur-md transition-colors hover:border-slate-500 hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
         >
           <RotateCcw aria-hidden className="size-3.5" />
           Vue globale
@@ -154,7 +162,7 @@ function HubOverlays({ containerRef }: { containerRef: RefObject<HTMLDivElement 
         </div>
       )}
 
-      <p className="pointer-events-none absolute bottom-4 left-4 z-10 text-xs text-slate-400">
+      <p className="pointer-events-none absolute bottom-4 left-[21rem] z-10 text-xs text-slate-400">
         Clic gauche: Tourner | Clic droit: Déplacer | Molette: Zoom
       </p>
 
@@ -172,7 +180,7 @@ function HubOverlays({ containerRef }: { containerRef: RefObject<HTMLDivElement 
         </span>
         <span className="text-[11px] text-slate-500">Securium City Hub v1.0</span>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -181,20 +189,24 @@ export function HubView({ hdri = false }: { hdri?: boolean }) {
   const sceneRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="relative h-[600px] w-full overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
+    <div className="relative h-dvh w-full overflow-hidden bg-slate-950">
       {is3DActive ? (
-        // touch-none : sur mobile, le glissement fait tourner la scène sans déclencher le scroll ni le pull-to-refresh.
+        // touch-none : sur mobile, le glissement fait tourner la ville sans déclencher le scroll ni le pull-to-refresh.
         <div ref={sceneRef} className="absolute inset-0 touch-none">
-          <HubScene hdri={hdri} />
+          {/* Le Canvas R3F se pose en absolu : sans cela, il occupe le flux et repousse la couche d'interface. */}
+          <div className="absolute inset-0 z-0">
+            <HubScene hdri={hdri} />
+          </div>
           <HubOverlays containerRef={sceneRef} />
         </div>
       ) : (
-        <Placeholder onActivate={() => setIs3DActive(true)} />
+        <>
+          <Placeholder onActivate={() => setIs3DActive(true)} />
+          <div className="pointer-events-none absolute left-4 top-4 z-10">
+            <span className={`${GLASS} text-slate-200`}>Securium Hub 3D - Live Preview</span>
+          </div>
+        </>
       )}
-
-      <div className="pointer-events-none absolute left-4 top-4 z-10">
-        <span className={`${GLASS} text-slate-200`}>Securium Hub 3D - Live Preview</span>
-      </div>
     </div>
   );
 }

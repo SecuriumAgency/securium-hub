@@ -261,7 +261,7 @@ export function HubScene({ hdri = false }: { hdri?: boolean }) {
 
   // shadows="percentage" : PCFSoftShadowMap a été retiré de three r186 (avertissement en console).
   return (
-    <Canvas shadows="percentage" dpr={[1, 2]} camera={{ position, fov }}>
+    <Canvas className="absolute inset-0 w-full h-full z-0" shadows="percentage" dpr={[1, 2]} camera={{ position, fov }}>
       <color attach="background" args={[light.background]} />
       <ambientLight color={light.ambient} intensity={light.ambientIntensity} />
       <directionalLight

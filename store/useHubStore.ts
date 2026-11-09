@@ -7,6 +7,10 @@ export type TimeOfDay = "jour" | "nuit";
 export type SystemStatus = "online" | "maintenance";
 export type SiteStatus = "online" | "offline" | "maintenance";
 
+// Entrée du journal d'activité du NOC : horodatée, affichée dans la barre latérale.
+export type LogLevel = "info" | "warn" | "error";
+export type SystemLog = { id: string; timestamp: number; message: string; level: LogLevel };
+
 // Un site du réseau, relié à un bâtiment du plan par son identifiant. activeVisitors vaut null tant qu'aucune
 // source temps réel n'existe : l'infobulle l'affiche comme non disponible.
 export type SiteData = {
@@ -39,6 +43,9 @@ type HubState = {
   sitesNetwork: SiteData[];
   isLoading: boolean;
   hasError: boolean;
+  // Journal d'activité : scans et connexions aux sites, les plus anciens en tête.
+  systemLogs: SystemLog[];
+  addLog: (message: string, level: LogLevel) => void;
   setTimeOfDay: (timeOfDay: TimeOfDay) => void;
   setSystemStatus: (systemStatus: SystemStatus) => void;
   setActiveNode: (activeNode: string | null) => void;
@@ -46,7 +53,11 @@ type HubState = {
   fetchNetworkStatus: () => Promise<void>;
 };
 
-export const useHubStore = create<HubState>()((set) => ({
+// Compteur des entrées du journal, et plafond : le journal ne grossit pas sans limite.
+let logSequence = 0;
+const MAX_SYSTEM_LOGS = 200;
+
+export const useHubStore = create<HubState>()((set, get) => ({
   timeOfDay: "jour",
   // Statut simulé : aucune télémétrie n'alimente encore cette valeur.
   systemStatus: "online",
@@ -55,12 +66,21 @@ export const useHubStore = create<HubState>()((set) => ({
   sitesNetwork: [],
   isLoading: false,
   hasError: false,
+  systemLogs: [],
+  addLog: (message, level) =>
+    set((state) => {
+      logSequence += 1;
+      const entry: SystemLog = { id: `log-${logSequence}`, timestamp: Date.now(), message, level };
+      return { systemLogs: [...state.systemLogs, entry].slice(-MAX_SYSTEM_LOGS) };
+    }),
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
   setSystemStatus: (systemStatus) => set({ systemStatus }),
   setActiveNode: (activeNode) => set({ activeNode }),
   resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1 })),
   fetchNetworkStatus: async () => {
+    const { addLog } = get();
     set({ isLoading: true, hasError: false });
+    addLog("Scan du réseau multi-sites démarré", "info");
     try {
       const response = await fetch("/api/fleet", { cache: "no-store" });
       if (!response.ok) throw new Error(`/api/fleet a répondu ${response.status}`);
@@ -73,11 +93,18 @@ export const useHubStore = create<HubState>()((set) => ({
         return [{ id, name: site?.name ?? label, status, activeVisitors: null }];
       });
       set({ sitesNetwork, isLoading: false });
+      // Une ligne par site, selon son statut réel.
+      for (const site of sitesNetwork) {
+        if (site.status === "online") addLog(`Connexion à ${site.name} établie`, "info");
+        else if (site.status === "offline") addLog(`${site.name} : hors ligne`, "error");
+        else addLog(`${site.name} : statut inconnu, à vérifier`, "warn");
+      }
     } catch (error) {
       // Réseau ou API injoignable : par précaution, tous les bâtiments passent en maintenance.
       console.error("[hub] statut du réseau indisponible :", error instanceof Error ? error.message : "erreur inconnue");
       const fallback = PLAN_SITES.map(({ id, label }) => ({ id, name: label, status: "maintenance" as const, activeVisitors: null }));
       set({ sitesNetwork: fallback, isLoading: false, hasError: true });
+      addLog("Scan impossible : API injoignable, statuts en maintenance par précaution", "error");
     }
   },
 }));
