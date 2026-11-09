@@ -72,6 +72,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   runtime: "nodejs",
   // Toutes les routes, sauf les fichiers statiques de Next et de public/.
-  // Fichiers 3D statiques (modèles glTF/GLB) : publics, chargés par le navigateur sans session.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|glb|gltf|bin)$).*)"],
+  // Modèles 3D publics (glTF/GLB/BIN) : seulement sous /models/hub/, sans session. Tout autre fichier 3D reste protégé.
+  // Sans « .. », « % » ni « \ » dans le chemin : une remontée de dossier ne peut pas sortir de /models/hub/.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|models/hub/(?!.*(?:\\.\\.|%|\\\\))[^?]+\\.(?:glb|gltf|bin)$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };
