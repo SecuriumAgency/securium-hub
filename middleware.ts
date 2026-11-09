@@ -72,5 +72,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   runtime: "nodejs",
   // Toutes les routes, sauf les fichiers statiques de Next et de public/.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  // Fichiers 3D statiques (modèles glTF/GLB) : publics, chargés par le navigateur sans session.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|glb|gltf|bin)$).*)"],
 };
