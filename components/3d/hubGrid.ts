@@ -20,8 +20,9 @@ export type Placement<Model extends string> = {
   lift?: number;
 };
 
-// Bâtiment commercial cliquable : son libellé (infobulle) et la page d'administration qu'il ouvre.
-export type BuildingPlacement = Placement<BuildingModel> & { label: string; href: string };
+// Bâtiment commercial cliquable : son libellé (infobulle), la page d'administration qu'il ouvre, et le site
+// du réseau qu'il représente (identifiant de lib/mock-data.json, facultatif : sans site, son statut reste inconnu).
+export type BuildingPlacement = Placement<BuildingModel> & { label: string; href: string; siteId?: string };
 
 export const GRID_MAP = {
   tile: 1,
@@ -37,11 +38,12 @@ export const GRID_MAP = {
   // Rangée avant (z = -2), face à la route ; rangée arrière (z = -4), derrière.
   // Chaque immeuble ouvre une page d'administration existante.
   buildings: [
-    { id: "immeuble-a-rue", label: "Parc Sites", href: "/admin/fleet", model: "building-a", x: -4, z: -2, rotation: 0 },
-    { id: "immeuble-c-rue", label: "Lead Broker", href: "/admin/broker", model: "building-c", x: -2, z: -2, rotation: 0 },
-    { id: "immeuble-a-rue-2", label: "Prospection", href: "/admin/outreach", model: "building-a", x: 5.5, z: -2, rotation: 0 },
-    { id: "immeuble-c-fond", label: "Matchmaker", href: "/admin/broker/matchmaker", model: "building-c", x: -3, z: -4, rotation: 0 },
-    { id: "immeuble-a-fond", label: "Audit SEO", href: "/admin/seo", model: "building-a", x: 0, z: -4, rotation: 0 },
+    // Affectation site → bâtiment : à valider, c'est une simple donnée d'affichage.
+    { id: "immeuble-a-rue", label: "Parc Sites", href: "/admin/fleet", model: "building-a", x: -4, z: -2, rotation: 0, siteId: "securium-agency" },
+    { id: "immeuble-c-rue", label: "Lead Broker", href: "/admin/broker", model: "building-c", x: -2, z: -2, rotation: 0, siteId: "securium-labs" },
+    { id: "immeuble-a-rue-2", label: "Prospection", href: "/admin/outreach", model: "building-a", x: 5.5, z: -2, rotation: 0, siteId: "elite-depannage-34" },
+    { id: "immeuble-c-fond", label: "Matchmaker", href: "/admin/broker/matchmaker", model: "building-c", x: -3, z: -4, rotation: 0, siteId: "rescue-247-uk" },
+    { id: "immeuble-a-fond", label: "Audit SEO", href: "/admin/seo", model: "building-a", x: 0, z: -4, rotation: 0, siteId: "geoenergy-habitat" },
     { id: "immeuble-c-fond-2", label: "Rapports", href: "/admin/reports", model: "building-c", x: 3.5, z: -4, rotation: 0 },
   ] as BuildingPlacement[],
   // Boutique (Mini Shop) : sol, vitrine et frigo, dans la rangée avant, à l'est des immeubles.
