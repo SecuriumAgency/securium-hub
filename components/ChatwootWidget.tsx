@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import Script from "next/script";
 
-// Widget de chat en direct Chatwoot. Le script est ajouté après le premier rendu, sans bloquer le chargement :
-// il ne doit pas peser sur les Core Web Vitals. Seul le token public du site est utilisé (jamais un jeton d'API).
+// Widget de chat en direct Chatwoot. Chargé par next/script en stratégie lazyOnload : le script ne part
+// qu'une fois la page chargée et inactive, il ne bloque ni le rendu ni l'interactivité (Core Web Vitals).
+// Seul le token public du site est utilisé (jamais un jeton d'API).
 declare global {
   interface Window {
     chatwootSettings?: { position: "left" | "right"; type: "standard" | "expanded_bubble" };
@@ -12,24 +13,21 @@ declare global {
 }
 
 export default function ChatwootWidget() {
-  useEffect(() => {
-    const baseUrl = process.env.NEXT_PUBLIC_CHATWOOT_BASE_URL;
-    const websiteToken = process.env.NEXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN;
-    if (!baseUrl || !websiteToken) return;
-    if (document.getElementById("chatwoot-sdk")) return;
+  const baseUrl = process.env.NEXT_PUBLIC_CHATWOOT_BASE_URL;
+  const websiteToken = process.env.NEXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN;
+  if (!baseUrl || !websiteToken) return null;
 
+  // Réglages lus par le SDK au chargement : posés avant l'injection du script (next/script dédoublonne par id).
+  if (typeof window !== "undefined") {
     window.chatwootSettings = { position: "right", type: "standard" };
+  }
 
-    const script = document.createElement("script");
-    script.id = "chatwoot-sdk";
-    script.src = `${baseUrl}/packs/js/sdk.js`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      window.chatwootSDK?.run({ websiteToken, baseUrl });
-    };
-    document.body.appendChild(script);
-  }, []);
-
-  return null;
+  return (
+    <Script
+      id="chatwoot-sdk"
+      src={`${baseUrl}/packs/js/sdk.js`}
+      strategy="lazyOnload"
+      onLoad={() => window.chatwootSDK?.run({ websiteToken, baseUrl })}
+    />
+  );
 }

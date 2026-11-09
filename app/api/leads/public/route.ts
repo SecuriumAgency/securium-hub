@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { PUBLIC_SITE_ID, PublicLeadSchema, consentProof } from "@/lib/public-leads-rules";
+import { PUBLIC_SITE_ID, consentProof } from "@/lib/public-leads-rules";
+import { PublicLeadSchema } from "@/lib/public-leads-schema";
 import { calculateSuggestedPrice, classifyLeadQuality } from "@/lib/broker/pricingEngine";
 import { takeRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
