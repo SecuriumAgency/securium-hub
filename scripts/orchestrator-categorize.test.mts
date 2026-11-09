@@ -4,7 +4,22 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { classify } from "../lib/orchestrator/categorize.ts";
+import { alertSiteIds } from "../lib/use-agent-alerts.ts";
 import { POST } from "../app/api/webhooks/orchestrator/route.ts";
+
+describe("alertes 3D : sites en orange", () => {
+  it("une tâche non informative colore son site, une information non", () => {
+    const alerts = alertSiteIds([
+      { site: "elite-depannage-34", severity: "warning" },
+      { site: "securium-labs", severity: "info" },
+      { site: "securium-labs", severity: "critical" },
+    ]);
+    assert.deepEqual([...alerts].sort(), ["elite-depannage-34", "securium-labs"]);
+  });
+  it("aucune tâche : aucun site en alerte", () => {
+    assert.equal(alertSiteIds([]).size, 0);
+  });
+});
 
 describe("classifieur : type de tâche", () => {
   it("trafic en baisse -> SEO", () => {

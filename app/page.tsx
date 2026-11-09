@@ -11,6 +11,7 @@ import { NetworkLinks } from "@/components/hub/NetworkLinks";
 import { SiteNode } from "@/components/hub/SiteNode";
 import { SitePanel } from "@/components/hub/SitePanel";
 import { TrafficSystem } from "@/components/hub/TrafficSystem";
+import { useAgentAlerts } from "@/lib/use-agent-alerts";
 import { useFleet } from "@/lib/use-fleet";
 import { useLeadsPolling } from "@/lib/use-leads";
 import { useTelemetryPolling } from "@/lib/use-telemetry";
@@ -35,6 +36,8 @@ function IsometricCamera() {
 
 export default function Home() {
   const sites = useFleet();
+  // Sites ayant une tâche en attente de l'Orchestrateur : affichés en orange.
+  const alerts = useAgentAlerts();
   // Alimentent les stores des leads et de la télémétrie sans state local : leurs mises à jour ne
   // re-rendent pas Home, seulement leurs abonnés (HUD, panneaux, effets 3D du QG).
   useLeadsPolling();
@@ -93,6 +96,7 @@ export default function Home() {
             key={site.id}
             site={site}
             selected={site.id === selectedId}
+            alert={alerts.has(site.id)}
             onSelect={setSelectedId}
             portal={overlay}
           />
