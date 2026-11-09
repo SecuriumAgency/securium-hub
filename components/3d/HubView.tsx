@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { Box, RotateCcw } from "lucide-react";
 import { HubLoader } from "@/components/ui/HubLoader";
-import { buildingLabel, useHubClock, useHubStore, useNetworkStatus, type SiteStatus } from "@/store/useHubStore";
+import { buildingLabel, useHubClock, useHubStore, useNetworkStatus, type LightingMode, type SiteStatus } from "@/store/useHubStore";
 
 // Le moteur 3D (three, React Three Fiber, drei, ≈295 kB gzip) n'est chargé qu'au clic sur « Charger le Hub 3D ».
 // Tant que la scène est inactive, la page ne charge que le placeholder : aucun script 3D ne bloque le fil principal.
@@ -102,6 +102,35 @@ function Placeholder({ onActivate }: { onActivate: () => void }) {
   );
 }
 
+// Éclairage : automatique (heure réelle) ou forcé en jour ou en nuit, pour une lecture constante du NOC.
+const LIGHTING_OPTIONS: { value: LightingMode; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "jour", label: "Jour" },
+  { value: "nuit", label: "Nuit" },
+];
+
+function LightingToggle() {
+  const mode = useHubStore((state) => state.lightingMode);
+  const setMode = useHubStore((state) => state.setLightingMode);
+  return (
+    <div role="group" aria-label="Éclairage" className="pointer-events-auto flex gap-1 rounded-full border border-slate-700/50 bg-slate-900/80 p-1 text-xs backdrop-blur-md">
+      {LIGHTING_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={mode === option.value}
+          onClick={() => setMode(option.value)}
+          className={`min-h-9 rounded-full px-3 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-cyan-400 ${
+            mode === option.value ? "bg-cyan-400/15 text-cyan-100" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Couche d'interface au-dessus de la scène : barre latérale NOC, infobulle, aide, heure et statut. Elle ne reçoit
 // pas les événements de souris (pointer-events-none) : le glisser pour faire tourner la ville passe à travers elle.
 // Montée seulement avec la scène, pour qu'aucune mise à jour ne tourne tant que la 3D n'est pas chargée.
@@ -125,7 +154,8 @@ function HubOverlays({ containerRef }: { containerRef: RefObject<HTMLDivElement 
     <div className="pointer-events-none relative z-10 flex h-full w-full">
       <NocSidebar />
 
-      <div className="absolute right-4 top-4">
+      <div className="absolute right-4 top-4 flex items-center gap-2">
+        <LightingToggle />
         <button
           type="button"
           onClick={resetView}

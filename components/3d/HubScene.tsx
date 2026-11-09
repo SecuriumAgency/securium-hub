@@ -53,13 +53,14 @@ const WINDOW_GLOW = { color: "#fbbf24", intensity: 0.12 };
 // Distance de la caméra à la cible lors d'un focus sur un bâtiment.
 const FOCUS_OFFSET: Vec3 = [4, 5, 4];
 
-// HDRI locale, téléchargée par scripts/fetch-hub-env.mjs. Sans ce fichier, la scène n'appelle aucun CDN.
+// HDRI locale (CC0), téléchargée une fois par scripts/fetch-hub-env.mjs. La scène ne lit jamais un CDN.
 const HDRI_URL = "/models/env/city.hdr";
 
 // Reflets d'environnement : la HDRI locale si le fichier existait au build (décidé par app/hub/page.tsx),
 // sinon un éclairage de remplissage qui suit l'heure. Aucune requête réseau à l'exécution.
 function EnvironmentLight({ timeOfDay, hdri }: { timeOfDay: TimeOfDay; hdri: boolean }) {
-  if (hdri) return <Environment files={HDRI_URL} />;
+  // La nuit, les reflets de la HDRI sont réduits : sinon la lumière du jour persiste dans l'ambiance nocturne.
+  if (hdri) return <Environment files={HDRI_URL} environmentIntensity={timeOfDay === "nuit" ? 0.3 : 1} />;
   const light = LIGHTS[timeOfDay];
   return <hemisphereLight color={light.sky} groundColor={light.ground} intensity={light.hemisphere} />;
 }
