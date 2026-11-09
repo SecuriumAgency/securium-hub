@@ -30,7 +30,7 @@ const POLES: Spot[] = [
 
 // Devant la ville, à l'est du parc des animaux.
 const PARASOLS: Spot[] = [
-  { x: 1, z: 3 },
+  { x: 2, z: 3 },
   { x: 3, z: 4 },
   { x: 5, z: 3 },
 ];

@@ -4,6 +4,11 @@ import { GRID_MAP, SITE_MAPPING } from "@/components/3d/hubGrid";
 
 // État du hub 3D : moment de la journée (éclairage), état du réseau multi-sites, sites et bâtiment survolé.
 export type TimeOfDay = "jour" | "nuit";
+// Éclairage : « auto » suit l'heure réelle ; « jour » ou « nuit » forcent l'ambiance, pour une lecture constante du NOC.
+export type LightingMode = "auto" | "jour" | "nuit";
+
+// Moment effectif : l'heure réelle en mode auto, sinon le mode forcé.
+const resolveTime = (mode: LightingMode, clock: TimeOfDay): TimeOfDay => (mode === "auto" ? clock : mode);
 export type SystemStatus = "online" | "maintenance";
 export type SiteStatus = "online" | "offline" | "maintenance";
 
@@ -34,9 +39,16 @@ const PLAN_SITES: { id: string; label: string; siteId?: string }[] = [
 ];
 
 type HubState = {
+  // Moment effectif (éclairage) : dérivé de l'heure réelle et du mode d'éclairage.
   timeOfDay: TimeOfDay;
+  clockTimeOfDay: TimeOfDay;
+  lightingMode: LightingMode;
+  setLightingMode: (mode: LightingMode) => void;
   systemStatus: SystemStatus;
   activeNode: string | null;
+  // Nœud sélectionné (clic sur un bâtiment ou dans la barre) : la caméra s'en approche et la barre le surligne.
+  selectedNode: string | null;
+  selectNode: (id: string | null) => void;
   // Incrémenté par « Réinitialiser la vue » : la caméra revient à sa position de départ.
   viewVersion: number;
   // Statut du réseau : sites des bâtiments, chargement en cours, échec du dernier appel.
@@ -46,7 +58,8 @@ type HubState = {
   // Journal d'activité : scans et connexions aux sites, les plus anciens en tête.
   systemLogs: SystemLog[];
   addLog: (message: string, level: LogLevel) => void;
-  setTimeOfDay: (timeOfDay: TimeOfDay) => void;
+  // Reçoit l'heure réelle (horloge) : sans effet sur le moment effectif si le mode est forcé.
+  setTimeOfDay: (clockValue: TimeOfDay) => void;
   setSystemStatus: (systemStatus: SystemStatus) => void;
   setActiveNode: (activeNode: string | null) => void;
   resetView: () => void;
@@ -59,9 +72,14 @@ const MAX_SYSTEM_LOGS = 200;
 
 export const useHubStore = create<HubState>()((set, get) => ({
   timeOfDay: "jour",
+  clockTimeOfDay: "jour",
+  lightingMode: "auto",
+  setLightingMode: (lightingMode) => set((state) => ({ lightingMode, timeOfDay: resolveTime(lightingMode, state.clockTimeOfDay) })),
   // Statut simulé : aucune télémétrie n'alimente encore cette valeur.
   systemStatus: "online",
   activeNode: null,
+  selectedNode: null,
+  selectNode: (selectedNode) => set({ selectedNode }),
   viewVersion: 0,
   sitesNetwork: [],
   isLoading: false,
@@ -73,10 +91,12 @@ export const useHubStore = create<HubState>()((set, get) => ({
       const entry: SystemLog = { id: `log-${logSequence}`, timestamp: Date.now(), message, level };
       return { systemLogs: [...state.systemLogs, entry].slice(-MAX_SYSTEM_LOGS) };
     }),
-  setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
+  setTimeOfDay: (clockValue) =>
+    set((state) => ({ clockTimeOfDay: clockValue, timeOfDay: resolveTime(state.lightingMode, clockValue) })),
   setSystemStatus: (systemStatus) => set({ systemStatus }),
   setActiveNode: (activeNode) => set({ activeNode }),
-  resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1 })),
+  // « Vue globale » : la caméra revient à sa place de départ, et la sélection est levée.
+  resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1, selectedNode: null })),
   fetchNetworkStatus: async () => {
     const { addLog } = get();
     set({ isLoading: true, hasError: false });

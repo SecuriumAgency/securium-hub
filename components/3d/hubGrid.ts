@@ -40,11 +40,9 @@ export const GRID_MAP = {
   // Vue de départ et cible de l'orbite : le centre du diorama, légèrement relevé.
   camera: { position: [9, 8, 9] as Vec3, fov: 40 },
   target: [0, 0.5, 0] as Vec3,
-  // Axe de routes continu : 13 tuiles de x = -6 à x = 6, sur z = 0.
-  roads: { z: 0, from: -6, to: 6 },
-  // Voie du taxi : au centre de la chaussée (largeur 1). À l'échelle 0,55, sa carrosserie fait 0,83 de large :
-  // elle tient dans la chaussée, sans déborder sur le trottoir. Il roule vers +x et repart de -6 quand il dépasse 6.
-  traffic: { lane: 0, from: -6, to: 6, speed: 1.2, scale: 0.55, lift: 0 },
+  // Axe de routes continu, sur z = 0, de x = -6 à x = 6. Carrefour en croix en x = 0 : une rue au nord (z -1 à -3)
+  // et une au sud (z 1 à 4), chacune en cul-de-sac. Les véhicules tournent à ce carrefour (UrbanLifeSimulation.tsx).
+  roads: { z: 0, from: -6, to: 6, cross: { x: 0, north: -3, south: 4 } },
   // Rangée avant (z = -2), face à la route ; rangée arrière (z = -4), derrière.
   // Chaque immeuble ouvre une page d'administration existante.
   buildings: [
@@ -63,14 +61,7 @@ export const GRID_MAP = {
     { id: "boutique-frigo", model: "freezer", x: 3.2, z: -2.1, rotation: 0 },
   ] as Placement<ShopModel>[],
   shopSite: { id: "boutique", label: "Images locales", href: "/admin/image-studio", center: [2.1, 0, -2.05] as Vec3 },
-  // Trottoirs : nord (z = -1, devant la rangée avant) et sud (z = 1, de l'autre côté de la route).
-  // Échelle 0,45 : la taille d'un humain reste proche de celle d'une porte, et bien au-dessous de la voiture.
-  characters: [
-    { id: "pieton-1", model: "male", x: -3, z: -1, rotation: 0, scale: 0.45 },
-    { id: "pieton-2", model: "female", x: 1, z: -1, rotation: 0, scale: 0.45 },
-    { id: "pieton-3", model: "male", x: -1, z: 1, rotation: Math.PI, scale: 0.45 },
-    { id: "pieton-4", model: "female", x: 4, z: 1, rotation: Math.PI, scale: 0.45 },
-  ] as Placement<CharacterModel>[],
+  // Les humains ne sont plus posés ici : ils se déplacent dans UrbanLifeSimulation.tsx (échelle 0,45).
   // Coin parc, au sud-ouest : à 0,08, un animal reste plus petit qu'un humain (environ la taille d'une taille de personne).
   animals: [
     { id: "chat", model: "cat", x: -6.5, z: 3.5, rotation: Math.PI / 2, scale: 0.08, lift: 0 },
