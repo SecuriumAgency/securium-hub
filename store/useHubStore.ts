@@ -7,13 +7,27 @@ export type TimeOfDay = "jour" | "nuit";
 export type SystemStatus = "online" | "maintenance";
 export type SiteStatus = "online" | "offline" | "maintenance";
 
-// Un site du réseau. Son id est celui d'un bâtiment ou de la boutique dans hubGrid.ts : c'est ce lien qui le place dans le plan.
+// Un site du réseau, relié à un bâtiment du plan par son identifiant. activeVisitors vaut null tant qu'aucune
+// source temps réel n'existe : l'infobulle l'affiche comme non disponible.
 export type SiteData = {
   id: string;
   name: string;
   status: SiteStatus;
-  activeVisitors: number;
+  activeVisitors: number | null;
 };
+
+// Réponse de /api/fleet : statut de chaque site, lu sur son dernier déploiement de production Vercel.
+type FleetSite = { id: string; name: string; status: "online" | "offline" | "unknown" };
+type FleetResponse = { sites: FleetSite[] };
+
+// « unknown » : statut pas encore reçu, ou API Vercel injoignable pour ce site. On le montre en maintenance, pour vérifier.
+const FLEET_TO_HUB: Record<FleetSite["status"], SiteStatus> = { online: "online", offline: "offline", unknown: "maintenance" };
+
+// Bâtiments du plan et leur site. La boutique n'est rattachée à aucun site.
+const PLAN_SITES: { id: string; label: string; siteId?: string }[] = [
+  ...GRID_MAP.buildings.map((building) => ({ id: building.id, label: building.label, siteId: building.siteId })),
+  { id: GRID_MAP.shopSite.id, label: GRID_MAP.shopSite.label },
+];
 
 type HubState = {
   timeOfDay: TimeOfDay;
@@ -21,25 +35,16 @@ type HubState = {
   activeNode: string | null;
   // Incrémenté par « Réinitialiser la vue » : la caméra revient à sa position de départ.
   viewVersion: number;
-  // Sites du réseau, remplis par fetchNetworkStatus.
+  // Statut du réseau : sites des bâtiments, chargement en cours, échec du dernier appel.
   sitesNetwork: SiteData[];
+  isLoading: boolean;
+  hasError: boolean;
   setTimeOfDay: (timeOfDay: TimeOfDay) => void;
   setSystemStatus: (systemStatus: SystemStatus) => void;
   setActiveNode: (activeNode: string | null) => void;
   resetView: () => void;
   fetchNetworkStatus: () => Promise<void>;
 };
-
-// Données simulées : un site vitrine en ligne, un site partenaire hors ligne, un Click & Collect en maintenance.
-// À remplacer par l'appel réel à l'API de télémétrie.
-const MOCK_SITES: SiteData[] = [
-  { id: "immeuble-a-rue", name: "Site vitrine", status: "online", activeVisitors: 42 },
-  { id: "immeuble-c-rue", name: "Site partenaire", status: "offline", activeVisitors: 0 },
-  { id: "boutique", name: "Site Click & Collect", status: "maintenance", activeVisitors: 3 },
-];
-
-// Délai simulé d'un appel réseau.
-const MOCK_LATENCY_MS = 400;
 
 export const useHubStore = create<HubState>()((set) => ({
   timeOfDay: "jour",
@@ -48,14 +53,32 @@ export const useHubStore = create<HubState>()((set) => ({
   activeNode: null,
   viewVersion: 0,
   sitesNetwork: [],
+  isLoading: false,
+  hasError: false,
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
   setSystemStatus: (systemStatus) => set({ systemStatus }),
   setActiveNode: (activeNode) => set({ activeNode }),
   resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1 })),
   fetchNetworkStatus: async () => {
-    // Simulation d'un appel réseau : le tableau reste vide pendant le délai.
-    await new Promise((resolve) => setTimeout(resolve, MOCK_LATENCY_MS));
-    set({ sitesNetwork: MOCK_SITES });
+    set({ isLoading: true, hasError: false });
+    try {
+      const response = await fetch("/api/fleet", { cache: "no-store" });
+      if (!response.ok) throw new Error(`/api/fleet a répondu ${response.status}`);
+      const { sites } = (await response.json()) as FleetResponse;
+      const fleet = new Map(sites.map((site) => [site.id, site]));
+      const sitesNetwork = PLAN_SITES.flatMap<SiteData>(({ id, label, siteId }) => {
+        if (!siteId) return [];
+        const site = fleet.get(siteId);
+        const status = site ? (FLEET_TO_HUB[site.status] ?? "maintenance") : "maintenance";
+        return [{ id, name: site?.name ?? label, status, activeVisitors: null }];
+      });
+      set({ sitesNetwork, isLoading: false });
+    } catch (error) {
+      // Réseau ou API injoignable : par précaution, tous les bâtiments passent en maintenance.
+      console.error("[hub] statut du réseau indisponible :", error instanceof Error ? error.message : "erreur inconnue");
+      const fallback = PLAN_SITES.map(({ id, label }) => ({ id, name: label, status: "maintenance" as const, activeVisitors: null }));
+      set({ sitesNetwork: fallback, isLoading: false, hasError: true });
+    }
   },
 }));
 
