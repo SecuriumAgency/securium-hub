@@ -2,23 +2,30 @@ import { NextResponse, type NextRequest } from "next/server";
 import { PUBLIC_SITE_ID, consentProof } from "@/lib/public-leads-rules";
 import { PublicLeadSchema } from "@/lib/public-leads-schema";
 import { calculateSuggestedPrice, classifyLeadQuality } from "@/lib/broker/pricingEngine";
+import { isDisposableEmail, emailDomain } from "@/lib/disposable-email";
 import { takeRateLimit } from "@/lib/rate-limit";
+import { checkOrigin, clientIp } from "@/lib/request-guard";
 import { prisma } from "@/lib/prisma";
 
 // Route publique (sans session ni jeton) du tunnel /devis. Pur CRUD : aucun appel à un LLM.
+// Défenses, dans l'ordre (les moins coûteuses d'abord) : origine officielle, débit par IP, taille, honeypot,
+// validation Zod, e-mail jetable (faux succès), puis seulement l'écriture en base.
 const MAX_BODY_BYTES = 8 * 1024;
-const RATE_LIMIT = { max: 5, windowMs: 10 * 60 * 1000 };
-
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || "inconnu";
-}
+// Trois demandes par heure et par IP. Le compteur est en mémoire : chaque instance serverless tient le sien (voir lib/rate-limit.ts).
+const RATE_LIMIT = { max: 3, windowMs: 60 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
+  // Origine : on ne dit pas pourquoi on refuse. Le motif reste dans les journaux serveur.
+  const origin = checkOrigin(request);
+  if (!origin.allowed) {
+    console.warn(`[leads/public] requête refusée : ${origin.reason}`);
+    return NextResponse.json({ error: "Requête refusée." }, { status: 403 });
+  }
+
   const limit = takeRateLimit(clientIp(request), RATE_LIMIT);
   if (!limit.allowed) {
     return NextResponse.json(
-      { error: "Trop de demandes. Réessayez dans quelques minutes." },
+      { error: "Trop de demandes. Réessayez plus tard." },
       { status: 429, headers: { "Retry-After": String(limit.retryAfterS) } },
     );
   }
@@ -52,6 +59,13 @@ export async function POST(request: NextRequest) {
     );
   }
   const lead = parsed.data;
+
+  // E-mail jetable ou à TLD suspect : faux succès, identique à une vraie réception (même code, même corps).
+  // Rien n'est écrit ni notifié. Seul le domaine sort dans les journaux, pour repérer les faux positifs.
+  if (lead.email && isDisposableEmail(lead.email)) {
+    console.warn(`[leads/public] e-mail rejeté silencieusement (domaine : ${emailDomain(lead.email)})`);
+    return NextResponse.json({ ok: true }, { status: 201 });
+  }
 
   try {
     const message = lead.message ? lead.message : null;
