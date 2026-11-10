@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
-import { CORE_DISTRICT_LAYOUT } from "@/lib/coreToolsMapping";
+import { CORE_DISTRICT_LAYOUT } from "@/lib/coreToolsRegistry";
 import type { CommercialModel } from "./village-layout";
 import { InteractiveBuilding, type OpenHandler } from "./InteractiveBuilding";
 

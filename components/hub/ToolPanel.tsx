@@ -1,55 +1,28 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowUpRight, X } from "lucide-react";
-import type { B2BProspectsResponse } from "@/lib/b2b/types";
-import { CORE_TOOLS, type CoreTool, type ToolView } from "@/lib/coreToolsMapping";
+import { CORE_TOOLS, type CoreTool } from "@/lib/coreToolsRegistry";
 import type { ProspectionCounts } from "@/lib/prospection-counts";
-import { startPolling } from "@/lib/poll";
-import type { AgentStatus, TelemetryResponse } from "@/lib/telemetry";
+import type { AgentStatus, PlanningSnapshot } from "@/lib/telemetry";
+import { useTelemetry } from "@/lib/use-telemetry";
 import { useHubStore } from "@/store/useHubStore";
+import { useCoreResource, useCoreToolsStore } from "@/store/useCoreToolsStore";
 
-// Rythme de rafraîchissement par flux. La flotte interroge Vercel site par site : elle reste plus lente.
-const INTERVAL_MS: Record<ToolView, number> = { telemetry: 15_000, fleet: 60_000, b2b: 60_000, prospection: 30_000, none: 0 };
-
-type FleetResponse = { sites: { id: string; name: string; status: "online" | "offline" | "unknown" }[]; updatedAt: string };
-type LoadState = { status: "loading" | "ready" | "error"; body: unknown };
-
-const AGENT_LABEL: Record<AgentStatus, string> = { running: "En ligne", idle: "En veille", error: "En erreur", unknown: "Inconnu" };
-const AGENT_TONE: Record<AgentStatus, string> = {
-  running: "text-emerald-300",
-  idle: "text-slate-400",
-  error: "text-rose-300",
-  unknown: "text-amber-300",
-};
-const SITE_TONE = { online: "text-emerald-300", offline: "text-rose-300", unknown: "text-amber-300" } as const;
-const SITE_LABEL = { online: "En ligne", offline: "Hors ligne", unknown: "À vérifier" } as const;
-
-// Panneau de l'outil actif : remplace la supervision générale tant qu'un outil est désigné (bâtiment ou ligne de la liste).
-// Rendu sous forme de bloc ; sans outil actif, il ne rend rien.
+// Panneau de l'outil actif : remplace la supervision générale tant qu'un outil est désigné (bâtiment de la ville ou ligne
+// de la liste). Les données viennent des stores déjà alimentés (télémétrie, sites, demandes B2B) ou du cache partagé des
+// routes (compteurs de prospection, rushs) : aucune requête n'est dupliquée. Sans outil actif, il ne rend rien.
 export function ToolPanel() {
-  const activeTool = useHubStore((state) => state.activeTool);
-  const setActiveTool = useHubStore((state) => state.setActiveTool);
+  const activeTool = useCoreToolsStore((state) => state.activeTool);
+  const setActiveTool = useCoreToolsStore((state) => state.setActiveTool);
   const tool = CORE_TOOLS.find((item) => item.id === activeTool) ?? null;
   if (!tool) return null;
-  // La clé remet l'état à zéro quand on change d'outil : pas de donnée de l'outil précédent qui reste affichée.
+  // La clé remet le panneau à zéro à chaque changement d'outil.
   return <ToolBody key={tool.id} tool={tool} onClose={() => setActiveTool(null)} />;
 }
 
 function ToolBody({ tool, onClose }: { tool: CoreTool; onClose: () => void }) {
-  const [state, setState] = useState<LoadState>({ status: tool.apiEndpoint ? "loading" : "ready", body: null });
-
-  useEffect(() => {
-    if (!tool.apiEndpoint) return;
-    return startPolling<unknown>(
-      tool.apiEndpoint,
-      INTERVAL_MS[tool.view],
-      (body) => setState({ status: "ready", body }),
-      () => setState((previous) => ({ ...previous, status: "error" })),
-    );
-  }, [tool.apiEndpoint, tool.view]);
-
   return (
     <section
       aria-label={`Outil ${tool.label}`}
@@ -74,7 +47,7 @@ function ToolBody({ tool, onClose }: { tool: CoreTool; onClose: () => void }) {
       </header>
 
       <div aria-live="polite" className="min-h-0 flex-1 overflow-y-auto text-xs">
-        <ToolData tool={tool} state={state} />
+        <ToolData tool={tool} />
       </div>
 
       <Link
@@ -87,27 +60,23 @@ function ToolBody({ tool, onClose }: { tool: CoreTool; onClose: () => void }) {
   );
 }
 
-// Corps de l'outil : squelette pendant le premier chargement, puis les données réelles de sa route.
-function ToolData({ tool, state }: { tool: CoreTool; state: LoadState }) {
-  if (tool.view === "none") {
-    return <p className="text-slate-400">Aucun flux temps réel pour cet outil. Ouvrez sa page pour le travailler.</p>;
-  }
-  if (state.status === "loading") return <Skeleton />;
-  if (state.status === "error") {
-    return <p className="text-amber-300">Flux indisponible. Nouvel essai au prochain rafraîchissement.</p>;
-  }
-
+// Un composant par vue : chaque vue appelle ses propres hooks, aucun hook n'est conditionnel.
+function ToolData({ tool }: { tool: CoreTool }) {
   switch (tool.view) {
     case "telemetry":
-      return <TelemetryView body={state.body as TelemetryResponse} />;
+      return <TelemetryView />;
+    case "planning":
+      return <PlanningView />;
     case "fleet":
-      return <FleetView body={state.body as FleetResponse} />;
+      return <FleetView />;
     case "b2b":
-      return <B2BView body={state.body as B2BProspectsResponse} />;
+      return <B2BView />;
     case "prospection":
-      return <ProspectionView body={state.body as ProspectionCounts} />;
-    default:
-      return null;
+      return <ProspectionView />;
+    case "rushes":
+      return <RushesView />;
+    case "none":
+      return <p className="text-slate-400">Aucun flux temps réel pour cet outil. Ouvrez sa page pour le travailler.</p>;
   }
 }
 
@@ -133,11 +102,20 @@ function Row({ label, tone, children }: { label: string; tone?: string; children
   );
 }
 
-function TelemetryView({ body }: { body: TelemetryResponse }) {
-  const report = body.report;
-  if (!report || body.stale) {
-    return <p className="text-amber-300">Pas de rapport frais du poste : les statuts ne sont pas connus.</p>;
-  }
+const AGENT_LABEL: Record<AgentStatus, string> = { running: "En ligne", idle: "En veille", error: "En erreur", unknown: "Inconnu" };
+const AGENT_TONE: Record<AgentStatus, string> = {
+  running: "text-emerald-300",
+  idle: "text-slate-400",
+  error: "text-rose-300",
+  unknown: "text-amber-300",
+};
+
+// Télémétrie : agents et serveurs, à partir du store de télémétrie déjà alimenté par la barre latérale.
+function TelemetryView() {
+  const { data, failed } = useTelemetry();
+  if (!data) return failed ? <p className="text-amber-300">Télémétrie injoignable.</p> : <Skeleton />;
+  const report = data.report;
+  if (!report || data.stale) return <p className="text-amber-300">Pas de rapport frais du poste : les statuts ne sont pas connus.</p>;
   const online = report.pm2.processes.filter((process) => process.status === "online").length;
   return (
     <div className="space-y-3">
@@ -155,10 +133,40 @@ function TelemetryView({ body }: { body: TelemetryResponse }) {
   );
 }
 
-function FleetView({ body }: { body: FleetResponse }) {
+// Planning : budget du jour et prochains passages des agents, tirés du planning transmis par le poste.
+function PlanningView() {
+  const { data, failed } = useTelemetry();
+  if (!data) return failed ? <p className="text-amber-300">Télémétrie injoignable.</p> : <Skeleton />;
+  const planning: PlanningSnapshot | null | undefined = data.stale ? null : data.report?.planning;
+  if (!planning) return <p className="text-amber-300">Planning non transmis par le poste.</p>;
+  return (
+    <div className="space-y-3">
+      <p className="text-slate-200">
+        Budget du jour : <span className="font-medium text-white">{planning.spentTodayUsd.toFixed(2)} $</span> /{" "}
+        {planning.dailyBudgetUsd.toFixed(2)} $
+      </p>
+      <ul className="space-y-1.5 border-t border-white/10 pt-2">
+        {planning.nextRuns.slice(0, 5).map((run) => (
+          <Row key={`${run.at}-${run.agent}`} label={run.agent}>
+            {new Date(run.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+          </Row>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const SITE_TONE = { online: "text-emerald-300", offline: "text-rose-300", maintenance: "text-amber-300" } as const;
+const SITE_LABEL = { online: "En ligne", offline: "Hors ligne", maintenance: "Maintenance" } as const;
+
+// Parc Sites : statut des sites, tiré du store du hub (déjà alimenté au chargement).
+function FleetView() {
+  const sites = useHubStore((state) => state.sitesNetwork);
+  const loading = useHubStore((state) => state.isLoading);
+  if (sites.length === 0) return loading ? <Skeleton /> : <p className="text-amber-300">Statut des sites indisponible.</p>;
   return (
     <ul className="space-y-1.5">
-      {body.sites.map((site) => (
+      {sites.map((site) => (
         <Row key={site.id} label={site.name} tone={SITE_TONE[site.status]}>
           {SITE_LABEL[site.status]}
         </Row>
@@ -167,28 +175,37 @@ function FleetView({ body }: { body: FleetResponse }) {
   );
 }
 
-function B2BView({ body }: { body: B2BProspectsResponse }) {
-  if (body.prospects.length === 0) return <p className="text-slate-400">Aucune demande B2B.</p>;
+// Audit B2B : demandes de contact, tirées du store du hub.
+function B2BView() {
+  const prospects = useHubStore((state) => state.b2bProspects);
+  if (prospects.length === 0) return <p className="text-slate-400">Aucune demande B2B.</p>;
   return (
     <ul className="space-y-2">
-      {body.prospects.map((prospect) => (
+      {prospects.map((prospect) => (
         <li key={prospect.id} className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate font-medium text-white">{prospect.name}</span>
             <span className="shrink-0 text-amber-300">{prospect.status}</span>
           </div>
-          <p className="truncate text-slate-400">{prospect.company} · {prospect.service}</p>
+          <p className="truncate text-slate-400">
+            {prospect.company} · {prospect.service}
+          </p>
         </li>
       ))}
     </ul>
   );
 }
 
-function ProspectionView({ body }: { body: ProspectionCounts }) {
+// Prospection : compteurs, partagés avec la Batcave par le cache de ressources (une seule requête).
+function ProspectionView() {
+  const resource = useCoreResource("/api/prospection/stats", 30_000);
+  if (!resource || (resource.status === "loading" && !resource.data)) return <Skeleton />;
+  if (!resource.data) return <p className="text-amber-300">Compteurs indisponibles. Nouvel essai au prochain rafraîchissement.</p>;
+  const counts = resource.data as ProspectionCounts;
   const figures = [
-    { label: "En base", value: body.prospects },
-    { label: "Démarchés", value: body.contacted },
-    { label: "Relances", value: body.followUps },
+    { label: "En base", value: counts.prospects },
+    { label: "Démarchés", value: counts.contacted },
+    { label: "Relances", value: counts.followUps },
   ];
   return (
     <dl className="grid grid-cols-3 gap-2 text-center">
@@ -199,5 +216,30 @@ function ProspectionView({ body }: { body: ProspectionCounts }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+type Rush = { id: string; fileName: string; sizeMb: number; createdAt: string };
+
+// Reels Studio : derniers rushs déposés, depuis /api/rushes (cache partagé).
+function RushesView() {
+  const resource = useCoreResource("/api/rushes", 60_000);
+  if (!resource || (resource.status === "loading" && !resource.data)) return <Skeleton />;
+  if (!resource.data) return <p className="text-amber-300">Rushs indisponibles. Nouvel essai au prochain rafraîchissement.</p>;
+  const rushes = (resource.data as { rushes: Rush[] }).rushes;
+  if (rushes.length === 0) return <p className="text-slate-400">Aucun rush déposé.</p>;
+  return (
+    <div className="space-y-2">
+      <p className="text-slate-300">
+        {rushes.length} rush{rushes.length > 1 ? "s" : ""} récent{rushes.length > 1 ? "s" : ""}
+      </p>
+      <ul className="space-y-1.5">
+        {rushes.slice(0, 5).map((rush) => (
+          <Row key={rush.id} label={rush.fileName}>
+            {rush.sizeMb} Mo
+          </Row>
+        ))}
+      </ul>
+    </div>
   );
 }

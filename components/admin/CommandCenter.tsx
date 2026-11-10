@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Box, Clapperboard, Globe, Server, type LucideIcon } from "lucide-react";
 import { DailyWorkboard } from "@/components/admin/DailyWorkboard";
-import { startPolling } from "@/lib/poll";
 import type { ProspectionCounts } from "@/lib/prospection-counts";
+import { useCoreResource } from "@/store/useCoreToolsStore";
 import type { AgentStatus, AgentTelemetry, TelemetryReport } from "@/lib/telemetry";
 import { useTelemetry, useTelemetryPolling } from "@/lib/use-telemetry";
 
@@ -69,14 +69,9 @@ export function CommandCenter({ summary }: { summary: ProspectionCounts }) {
   const loading = !data && !failed;
   const rows = loading ? PULSE_AGENTS.map((entry) => ({ label: entry.label, ...statusView.loading })) : pulseRows(report, stale);
 
-  const [counts, setCounts] = useState(summary);
-  useEffect(
-    () =>
-      startPolling<ProspectionCounts>("/api/prospection/stats", PROSPECTION_INTERVAL_MS, (body) =>
-        setCounts({ prospects: body.prospects, contacted: body.contacted, followUps: body.followUps }),
-      ),
-    [],
-  );
+  // Compteurs partagés avec le panneau d'outil par le cache de ressources : une seule requête, quel que soit le nombre d'écrans.
+  const prospection = useCoreResource("/api/prospection/stats", PROSPECTION_INTERVAL_MS);
+  const counts = (prospection?.data as ProspectionCounts | undefined) ?? summary;
   const processesOnline = report?.pm2.processes.filter((process) => process.status === "online").length ?? 0;
   const processesTotal = report?.pm2.processes.length ?? 0;
 

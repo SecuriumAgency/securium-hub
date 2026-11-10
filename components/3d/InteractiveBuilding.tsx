@@ -5,6 +5,8 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useCursor } from "@react-three/drei";
 import { MathUtils, Mesh, MeshStandardMaterial, type Group } from "three";
 import { useHubStore, type SiteStatus } from "@/store/useHubStore";
+import { useCoreToolsStore } from "@/store/useCoreToolsStore";
+import { STATE_GLOW } from "@/lib/coreToolState";
 import { PROSPECT_BUILDING_ID, type Vec3 } from "./hubGrid";
 
 export type OpenHandler = (href: string) => void;
@@ -21,6 +23,11 @@ const LEAD_GLOW = { color: "#a78bfa", intensity: 0.3 };
 // Demande B2B qui attend un audit : ambre, plus prioritaire que le violet des leads.
 const B2B_GLOW = { color: "#f59e0b", intensity: 0.3 };
 const WINDOW_GLOW = { color: "#fbbf24", intensity: 0.12 };
+// Service dégradé ou en erreur : lueur ambre ou rouge, selon le palier (couleurs de lib/coreToolState.ts).
+const SERVICE_GLOW = {
+  warning: { color: STATE_GLOW.warning, intensity: 0.3 },
+  error: { color: STATE_GLOW.error, intensity: 0.4 },
+};
 
 // Bâtiment interactif. Au survol : curseur pointeur, identifiant dans le store (infobulle de l'overlay), +5 % d'échelle.
 // Premier clic : sélection (la caméra s'approche, la barre latérale affiche l'outil). Second clic : page admin liée.
@@ -50,7 +57,11 @@ export function InteractiveBuilding({
   const timeOfDay = useHubStore((state) => state.timeOfDay);
   const leadAlert = useHubStore((state) => id === PROSPECT_BUILDING_ID && state.unseenLeads > 0);
   const b2bAlert = useHubStore((state) => id === PROSPECT_BUILDING_ID && state.b2bProspects.some((item) => item.status === "À auditer"));
-  const pulsing = leadAlert || b2bAlert;
+  // État de service de l'outil, publié par la barre latérale : vert, ambre ou rouge.
+  const serviceState = useCoreToolsStore((state) => state.states[id] ?? "unknown");
+  const serviceGlow = serviceState === "error" ? SERVICE_GLOW.error : serviceState === "warning" ? SERVICE_GLOW.warning : null;
+  // Pulsation : alertes (lead, B2B, service en erreur) et outil sélectionné.
+  const pulsing = leadAlert || b2bAlert || serviceState === "error" || (selected && toolGlow !== undefined);
   const selectedGlow = useMemo(() => (toolGlow ? { color: toolGlow, intensity: SELECTED_GLOW.intensity } : SELECTED_GLOW), [toolGlow]);
   const glow =
     status !== "online"
@@ -61,9 +72,7 @@ export function InteractiveBuilding({
           ? LEAD_GLOW
           : selected
             ? selectedGlow
-            : timeOfDay === "nuit"
-              ? WINDOW_GLOW
-              : ALERT_GLOW.online;
+            : (serviceGlow ?? (timeOfDay === "nuit" ? WINDOW_GLOW : ALERT_GLOW.online));
   // Matériaux standard du bâtiment : la lueur s'y applique, et la pulsation les fait varier à chaque image.
   const litMaterials = useRef<MeshStandardMaterial[]>([]);
   useCursor(hovered);

@@ -135,7 +135,7 @@ export const PLATES: Plate[] = [];
 export const PARKS: Vec3[] = [];
 export const PEOPLE: { model: PersonModel; x: number; z: number; rot: number }[] = [];
 
-// Quartier du QG : dix cases autour du socle, réservées aux outils Core (coreToolsMapping.ts). w et d : taille de la plaque.
+// Quartier du QG : dix cases autour du socle, réservées aux outils Core (coreToolsRegistry.ts). w et d : taille de la plaque.
 export const CORE_DISTRICT_CELLS: { x: number; z: number; w: number; d: number }[] = [
   { x: 0, z: -12, w: 17, d: 7 },
   { x: 0, z: 12, w: 17, d: 7 },
@@ -264,7 +264,7 @@ for (let i = 0; i < X_EDGES.length - 1; i++) {
     const z1 = Z_EDGES[j + 1];
     const cx = (x0 + x1) / 2;
     const cz = (z0 + z1) / 2;
-    // Socle et esplanades : posés plus haut. Quartier du QG : posé par coreToolsMapping.
+    // Socle et esplanades : posés plus haut. Quartier du QG : posé par coreToolsRegistry.
     if (x0 === -9 && x1 === 9 && (z0 === -8 || z0 === 0)) continue;
     if (CORE_KEYS.has(key(cx, cz))) continue;
 
