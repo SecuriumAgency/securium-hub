@@ -3,10 +3,12 @@
 import { useMemo } from "react";
 import { Color, InstancedMesh, Matrix4, MeshStandardMaterial, PlaneGeometry } from "three";
 import { StaticKit, poseMatrix } from "./InstancedKit";
-import { COMMERCIALS, COMMERCIAL_MODELS, HOUSES, HOUSE_MODELS, LAMPS, PEOPLE, PLATES, ROADS, TREES, TREE_MODELS, type Placement } from "./village-layout";
+import { COMMERCIALS, COMMERCIAL_MODELS, HOUSES, HOUSE_MODELS, LAMPS, PARASOLS, PEOPLE, PLATES, ROADS, TREES, TREE_MODELS, type Placement } from "./village-layout";
+import { WALK_SCALE } from "./urban-simulation";
 
-// Village statique : routes, quartiers, immeubles, parcs, lampadaires et figurants. Tout est instancié : une pièce,
-// un appel de rendu. Échelles : décor et bâtiments à 1, humains à 0,45. Tout pied est à y = 0.
+// Village statique : routes, quartiers, immeubles, parcs, lampadaires, parasols et figurants. Tout est instancié : une
+// pièce, un appel de rendu. Échelles : décor et bâtiments à 1, figurants à WALK_SCALE (même facteur que les véhicules).
+// Tout pied est à y = 0.
 // Les matrices sont calculées une fois, au chargement du module : aucune recomposition au fil des rendus React.
 const ROOT = "/models/hub";
 
@@ -20,8 +22,9 @@ const LAMP_MATRICES = matricesOf(LAMPS);
 const HOUSE_MATRICES = Object.fromEntries(HOUSE_MODELS.map((model) => [model, matricesOf(HOUSES[model])]));
 const COMMERCIAL_MATRICES = Object.fromEntries(COMMERCIAL_MODELS.map((model) => [model, matricesOf(COMMERCIALS[model])]));
 const TREE_MATRICES = Object.fromEntries(TREE_MODELS.map((model) => [model, matricesOf(TREES[model])]));
+const PARASOL_MATRICES = matricesOf(PARASOLS);
 const PERSON_MODELS = ["male-a", "female-a", "male-b", "female-b", "male-c", "female-c"] as const;
-const PERSON_MATRICES = Object.fromEntries(PERSON_MODELS.map((model) => [model, matricesOf(PEOPLE.filter((person) => person.model === model), 0.45)]));
+const PERSON_MATRICES = Object.fromEntries(PERSON_MODELS.map((model) => [model, matricesOf(PEOPLE.filter((person) => person.model === model), WALK_SCALE)]));
 
 // Parcelles : une plaque colorée par case, sous les bâtiments. Une seule instance pour tout le plan.
 function Plates() {
@@ -63,6 +66,7 @@ export function CityEnvironment({ night = false }: { night?: boolean }) {
       {TREE_MODELS.map((model) => (
         <StaticKit key={model} url={`${ROOT}/suburban/${model}.glb`} matrices={TREE_MATRICES[model]} />
       ))}
+      <StaticKit url={`${ROOT}/commercial/parasol.glb`} matrices={PARASOL_MATRICES} />
       {PERSON_MODELS.map((model) => (
         <StaticKit key={model} url={`${ROOT}/characters/character-${model}.glb`} matrices={PERSON_MATRICES[model]} />
       ))}

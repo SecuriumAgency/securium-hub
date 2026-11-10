@@ -13,9 +13,12 @@ export const CAR_COUNT = 44;
 export const WALKER_COUNT = 56;
 export const PET_COUNT = 10;
 
-export const CAR_SCALE = 0.55;
-export const WALK_SCALE = 0.45;
-export const PET_SCALE = 0.08;
+// Échelles mesurées sur les GLB : véhicules de 1,3 à 1,5 unité de large ; une voie fait 0,5. À 0,27, un véhicule fait
+// 0,40 de large et reste dans sa voie (marge de 0,05 de part et d'autre du décalage de 0,25). Humains et animaux suivent
+// le même facteur (0,27 / 0,55), pour garder les proportions de l'ancienne version.
+export const CAR_SCALE = 0.27;
+export const WALK_SCALE = 0.22;
+export const PET_SCALE = 0.04;
 export const CAR_LANE = 0.25;
 export const WALK_LANE = 0.8;
 const CAR_SPEED: [number, number] = [1.2, 0.5]; // [jour, nuit]
@@ -24,7 +27,8 @@ const PET_SPEED: [number, number] = [0.5, 0.2];
 const PROSPECT_SPEED = 0.9;
 // Ligne d'arrêt à STOP_GAP du carrefour ; écart minimal entre deux véhicules sur un même tronçon.
 const STOP_GAP = 0.9;
-const CAR_GAP = 1.4;
+// Véhicules plus courts (≈ 0,75 unité) : l'écart minimal se réduit en conséquence.
+const CAR_GAP = 1.0;
 // Pause du PNJ Prospect au QG, avant qu'il reparte.
 const TERMINUS_PAUSE = 4;
 

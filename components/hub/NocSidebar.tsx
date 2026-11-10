@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AgentsPanel } from "@/components/hub/AgentsPanel";
 import { HubNav } from "@/components/hub/HubNav";
+import { ToolPanel } from "@/components/hub/ToolPanel";
 import { GRID_MAP, PROSPECT_BUILDING_ID } from "@/components/3d/hubGrid";
 import { formatAgo, useNow } from "@/lib/clock";
+import { CORE_TOOLS } from "@/lib/coreToolsMapping";
 import { useTelemetryPolling } from "@/lib/use-telemetry";
 import { buildingLabel, useB2BPolling, useHubStore, useLeadsPolling, type LogLevel, type SiteStatus } from "@/store/useHubStore";
 
@@ -17,6 +19,7 @@ export function NocSidebar() {
   useTelemetryPolling();
   useLeadsPolling();
   useB2BPolling();
+  const activeTool = useHubStore((state) => state.activeTool);
 
   return (
     <aside
@@ -25,16 +28,14 @@ export function NocSidebar() {
     >
       <header className="border-b border-slate-800/50 px-4 py-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-300">Securium Hub 3D</p>
-        <p className="text-sm font-semibold text-white">Centre des opérations réseau</p>
+        <p className="text-sm font-semibold text-white">{activeTool ? "Outil du Securium Core" : "Centre des opérations réseau"}</p>
       </header>
 
-      {/* Agents : hauteur bornée, pour que les sites et le journal gardent de la place. */}
-      <div className="max-h-[40%] shrink-0 overflow-y-auto">
-        <AgentsPanel embedded />
-      </div>
+      {/* Haut de barre : la supervision générale, ou l'outil désigné dans la ville ou dans la liste. Hauteur bornée. */}
+      <div className="max-h-[40%] shrink-0 overflow-y-auto">{activeTool ? <ToolPanel /> : <AgentsPanel embedded />}</div>
 
       <HubSiteList />
-      <B2BSection />
+      {!activeTool && <B2BSection />}
       <NodeTelemetry />
       <HubLogStream />
 
@@ -45,10 +46,11 @@ export function NocSidebar() {
   );
 }
 
-// Nœuds du plan : chaque bâtiment et la boutique, dans l'ordre du plan.
+// Nœuds du plan : chaque bâtiment et la boutique, puis les bâtiments du quartier du QG (outils du Securium Core).
 const PLAN_NODES: { id: string; label: string; href: string }[] = [
   ...GRID_MAP.buildings.map((building) => ({ id: building.id, label: building.label, href: building.href })),
   { id: GRID_MAP.shopSite.id, label: GRID_MAP.shopSite.label, href: GRID_MAP.shopSite.href },
+  ...CORE_TOOLS.filter((tool) => tool.placement === "district").map((tool) => ({ id: tool.nodeId, label: tool.label, href: tool.href })),
 ];
 
 const NODE_DOT: Record<SiteStatus, string> = { online: "bg-green-500", maintenance: "bg-amber-500", offline: "bg-red-500" };
@@ -103,7 +105,9 @@ function HubSiteList() {
                     {unseenLeads} nouveau{unseenLeads > 1 ? "x" : ""}
                   </span>
                 )}
-                <span className="text-[11px] text-slate-400">{site ? NODE_LABEL[site.status] : "Statut indisponible"}</span>
+                <span className="text-[11px] text-slate-400">
+                  {site ? NODE_LABEL[site.status] : (CORE_TOOLS.find((tool) => tool.nodeId === node.id)?.category ?? "Statut indisponible")}
+                </span>
               </button>
             </li>
           );

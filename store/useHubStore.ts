@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { GRID_MAP, PROSPECT_BUILDING_ID, SITE_MAPPING } from "@/components/3d/hubGrid";
 import type { B2BProspect, B2BProspectsResponse } from "@/lib/b2b/types";
+import { toolForNode } from "@/lib/coreToolsMapping";
 import type { LeadsResponse } from "@/lib/leads";
 import { startPolling } from "@/lib/poll";
 import { initialSites } from "@/lib/sites";
@@ -53,6 +54,9 @@ type HubState = {
   // Nœud sélectionné (clic sur un bâtiment ou dans la barre) : la caméra s'en approche et la barre le surligne.
   selectedNode: string | null;
   selectNode: (id: string | null) => void;
+  // Outil du Securium Core désigné par la sélection (bâtiment de la ville ou ligne de la barre). Null : vue d'ensemble.
+  activeTool: string | null;
+  setActiveTool: (id: string | null) => void;
   // Incrémenté par « Réinitialiser la vue » : la caméra revient à sa position de départ.
   viewVersion: number;
   // Statut du réseau : sites des bâtiments, chargement en cours, échec du dernier appel.
@@ -112,9 +116,11 @@ export const useHubStore = create<HubState>()((set, get) => ({
   systemStatus: "online",
   activeNode: null,
   selectedNode: null,
+  activeTool: null,
+  setActiveTool: (activeTool) => set({ activeTool }),
   // Sélectionner le bâtiment de prospection vaut accusé de réception : les leads en attente sont marqués vus.
   selectNode: (selectedNode) => {
-    set({ selectedNode });
+    set({ selectedNode, activeTool: toolForNode(selectedNode)?.id ?? null });
     if (selectedNode === PROSPECT_BUILDING_ID) get().markLeadsSeen();
   },
   viewVersion: 0,
@@ -133,7 +139,7 @@ export const useHubStore = create<HubState>()((set, get) => ({
   setSystemStatus: (systemStatus) => set({ systemStatus }),
   setActiveNode: (activeNode) => set({ activeNode }),
   // « Vue globale » : la caméra revient à sa place de départ, et la sélection est levée.
-  resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1, selectedNode: null })),
+  resetView: () => set((state) => ({ viewVersion: state.viewVersion + 1, selectedNode: null, activeTool: null })),
   // Vide tant que la route protégée n'a pas répondu (voir useB2BPolling) : aucune donnée B2B dans le bundle.
   b2bProspects: [],
   setB2BProspects: (b2bProspects) => set({ b2bProspects }),
@@ -287,5 +293,5 @@ export function useB2BPolling() {
 export function buildingLabel(id: string | null): string | null {
   if (!id) return null;
   if (id === GRID_MAP.shopSite.id) return GRID_MAP.shopSite.label;
-  return GRID_MAP.buildings.find((building) => building.id === id)?.label ?? null;
+  return GRID_MAP.buildings.find((building) => building.id === id)?.label ?? toolForNode(id)?.label ?? null;
 }
