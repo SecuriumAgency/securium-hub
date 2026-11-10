@@ -114,6 +114,22 @@ export function telemetrySignals(data: TelemetryResponse): TelemetrySignals {
   };
 }
 
+// Santé de la ville selon les processus PM2 du poste. ok : rien à signaler, ou pas de rapport frais (on ne sait pas, on ne
+// réagit pas). degraded : un processus en erreur, ou arrêté alors qu'il n'est pas planifié, ou PM2 illisible.
+// halted : le daemon PM2 est arrêté.
+export type FleetHealth = "ok" | "degraded" | "halted";
+
+export function pm2Health(data: TelemetryResponse | null | undefined): FleetHealth {
+  const report = data && !data.stale ? data.report : null;
+  if (!report) return "ok";
+  if (report.pm2.state === "offline") return "halted";
+  if (report.pm2.state === "unavailable") return "degraded";
+  const failing = report.pm2.processes.some(
+    (service) => service.status === "errored" || (service.status === "stopped" && !service.cron),
+  );
+  return failing ? "degraded" : "ok";
+}
+
 const AGENT_STATUSES: readonly string[] = ["running", "idle", "error", "unknown"];
 const EVENT_STATUSES: readonly string[] = ["active", "paused", "error"];
 const PM2_STATES: readonly string[] = ["online", "offline", "unavailable"];

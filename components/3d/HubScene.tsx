@@ -14,7 +14,7 @@ import WallWindow from "./assets/WallWindow";
 import { DioramaIsland } from "./DioramaIsland";
 import { CityEnvironment } from "./CityEnvironment";
 import { UrbanLifeSimulation } from "./UrbanLifeSimulation";
-import { GRID_MAP, type BuildingModel, type ShopModel, type Vec3 } from "./hubGrid";
+import { GRID_MAP, PROSPECT_BUILDING_ID, type BuildingModel, type ShopModel, type Vec3 } from "./hubGrid";
 
 type GroupProps = ComponentProps<"group">;
 type OrbitTarget = { target: Vector3; update: () => void };
@@ -32,13 +32,17 @@ const LIGHTS: Record<
   nuit: { ambient: "#818cf8", ambientIntensity: 0.35, sun: "#c4b5fd", sunIntensity: 0.6, background: "#1e1b4b", sky: "#6366f1", ground: "#1e1b4b", hemisphere: 0.5 },
 };
 
-// Lueur par état, dans l'ordre de priorité : alerte du site, sélection, fenêtres allumées la nuit, sinon aucune.
+// Lueur par état, dans l'ordre de priorité : alerte du site, lead en attente, sélection, fenêtres allumées la nuit, sinon aucune.
 const ALERT_GLOW: Record<SiteStatus, { color: string; intensity: number }> = {
   online: { color: "#000000", intensity: 0 },
   maintenance: { color: "#f59e0b", intensity: 0.4 },
   offline: { color: "#ef4444", intensity: 0.4 },
 };
 const SELECTED_GLOW = { color: "#22d3ee", intensity: 0.35 };
+// Bâtiment de prospection avec un lead non vu : violet, qui pulse (voir la boucle d'images d'Interactive).
+const LEAD_GLOW = { color: "#a78bfa", intensity: 0.3 };
+// Demande B2B qui attend un audit : ambre, plus prioritaire que le violet des leads.
+const B2B_GLOW = { color: "#f59e0b", intensity: 0.3 };
 const WINDOW_GLOW = { color: "#fbbf24", intensity: 0.12 };
 
 // Distance de la caméra à la cible lors d'un focus sur un bâtiment.
@@ -81,7 +85,25 @@ function Interactive({
   const status = useHubStore((state) => state.sitesNetwork.find((site) => site.id === id)?.status ?? "online");
   const selected = useHubStore((state) => state.selectedNode === id);
   const timeOfDay = useHubStore((state) => state.timeOfDay);
-  const glow = status !== "online" ? ALERT_GLOW[status] : selected ? SELECTED_GLOW : timeOfDay === "nuit" ? WINDOW_GLOW : ALERT_GLOW.online;
+  const leadAlert = useHubStore((state) => id === PROSPECT_BUILDING_ID && state.unseenLeads > 0);
+  const b2bAlert = useHubStore(
+    (state) => id === PROSPECT_BUILDING_ID && state.b2bProspects.some((item) => item.status === "À auditer"),
+  );
+  const pulsing = leadAlert || b2bAlert;
+  const glow =
+    status !== "online"
+      ? ALERT_GLOW[status]
+      : b2bAlert
+        ? B2B_GLOW
+        : leadAlert
+          ? LEAD_GLOW
+          : selected
+          ? SELECTED_GLOW
+          : timeOfDay === "nuit"
+            ? WINDOW_GLOW
+            : ALERT_GLOW.online;
+  // Matériaux standard du bâtiment : la lueur s'y applique, et la pulsation les fait varier à chaque image.
+  const litMaterials = useRef<MeshStandardMaterial[]>([]);
   useCursor(hovered);
 
   // Les modèles gltf partagent leurs matériaux entre bâtiments identiques : chaque instance reçoit les siens, pour une lueur propre.
@@ -99,6 +121,7 @@ function Interactive({
   useEffect(() => {
     const group = ref.current;
     if (!group) return;
+    const lit: MeshStandardMaterial[] = [];
     group.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -106,15 +129,22 @@ function Interactive({
         if (material instanceof MeshStandardMaterial) {
           material.emissive.set(glow.color);
           material.emissiveIntensity = glow.intensity;
+          lit.push(material);
         }
       }
     });
+    litMaterials.current = lit;
   }, [glow]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const group = ref.current;
     if (!group) return;
     group.scale.setScalar(MathUtils.damp(group.scale.x, hovered ? 1.05 : 1, 10, delta));
+    if (pulsing) {
+      // Pulsation de 0,2 à 0,4 : le bâtiment respire tant qu'un lead n'a pas été vu ou qu'une demande B2B attend.
+      const pulse = 0.3 + 0.1 * Math.sin(state.clock.elapsedTime * 3);
+      for (const material of litMaterials.current) material.emissiveIntensity = pulse;
+    }
   });
 
   const handlePointerOver = (event: ThreeEvent<PointerEvent>) => {

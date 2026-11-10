@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Box, CalendarDays, Clapperboard, ExternalLink, FileText, FlaskConical, Factory, Globe, Image as ImageIcon, Layers, LayoutDashboard, Menu, Monitor, Search, Target, Users, Video, X, type LucideIcon } from "lucide-react";
+import { Bot, Box, CalendarDays, Clapperboard, ExternalLink, FileText, FlaskConical, Factory, Globe, Image as ImageIcon, Layers, LayoutDashboard, Menu, Monitor, Search, ShieldCheck, Target, Users, Video, X, type LucideIcon } from "lucide-react";
 import { useOverlay } from "./use-overlay";
 
 // Une entrée sans `href` n'a pas encore de page : elle s'affiche avec la mention « Bientôt », sans lien.
@@ -18,6 +18,7 @@ const LINKS: NavItem[] = [
   { href: "/admin/fleet", label: "Parc Sites", icon: Factory },
   { href: "/admin/agents", label: "Escadron Agents", icon: Bot },
   { href: "/admin/seo", label: "Audit SEO", icon: Search },
+  { href: "/admin/audit", label: "Audit B2B", icon: ShieldCheck },
   { href: "/admin/reports", label: "Rapports", icon: FileText },
   { href: "/admin/planning", label: "Planning", icon: CalendarDays },
   { href: "/admin/reels", label: "Reels Studio", icon: Clapperboard },

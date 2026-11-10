@@ -183,3 +183,42 @@ for (const building of [...GRID_MAP.buildings.map((b) => ({ id: b.id, x: b.x, z:
   }
   NOC_NODES[building.id] = best;
 }
+
+// ---- Carrefours à feux : chaque nœud d'au moins trois tronçons. Cycle de 14 s, décalé d'un carrefour à l'autre.
+export type Light = "green" | "amber" | "red";
+export const SIGNAL_CYCLE = 14;
+const GREEN_SECONDS = 6;
+const AMBER_SECONDS = 1;
+
+export const SIGNAL_NODES = Object.keys(GRAPH.nodes).filter((key) => degree(key) >= 3);
+const SIGNAL_SET = new Set(SIGNAL_NODES);
+const SIGNAL_OFFSET = new Map<string, number>(SIGNAL_NODES.map((key, index): [string, number] => [key, (index * 5) % SIGNAL_CYCLE]));
+
+export const isSignal = (node: string) => SIGNAL_SET.has(node);
+
+// État du feu d'un carrefour pour un axe : « h » = circulation est-ouest, « v » = nord-sud. Jamais deux axes au vert.
+export function signalState(node: string, axis: "h" | "v", time: number): Light {
+  const t = (time + (SIGNAL_OFFSET.get(node) ?? 0)) % SIGNAL_CYCLE;
+  if (t < GREEN_SECONDS) return axis === "h" ? "green" : "red";
+  if (t < GREEN_SECONDS + AMBER_SECONDS) return axis === "h" ? "amber" : "red";
+  if (t < SIGNAL_CYCLE - AMBER_SECONDS) return axis === "h" ? "red" : "green";
+  return axis === "h" ? "red" : "amber";
+}
+
+// Plus court chemin entre deux nœuds du réseau (parcours en largeur). Tableau vide s'il n'existe pas.
+export function shortestPath(from: string, to: string): string[] {
+  const previous = new Map<string, string | null>([[from, null]]);
+  const queue = [from];
+  for (let i = 0; i < queue.length && !previous.has(to); i++) {
+    for (const next of GRAPH.edges[queue[i]] ?? []) {
+      if (!previous.has(next)) {
+        previous.set(next, queue[i]);
+        queue.push(next);
+      }
+    }
+  }
+  if (!previous.has(to)) return [];
+  const path: string[] = [];
+  for (let node: string | null = to; node !== null; node = previous.get(node) ?? null) path.unshift(node);
+  return path;
+}
