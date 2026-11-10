@@ -6,7 +6,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
 import { Vector3 } from "three";
 import { useHubStore, type TimeOfDay } from "@/store/useHubStore";
-import { CORE_DISTRICT_LAYOUT, toolForNode } from "@/lib/coreToolsMapping";
+import { CORE_DISTRICT_LAYOUT, toolForNode } from "@/lib/coreToolsRegistry";
 import BuildingA from "./assets/BuildingA";
 import BuildingC from "./assets/BuildingC";
 import Floor from "./assets/Floor";

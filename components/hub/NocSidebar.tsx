@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { AgentsPanel } from "@/components/hub/AgentsPanel";
 import { HubNav } from "@/components/hub/HubNav";
 import { ToolPanel } from "@/components/hub/ToolPanel";
+import { useCoreStatePublisher } from "@/components/hub/useCoreStatePublisher";
+import { useCoreToolsStore } from "@/store/useCoreToolsStore";
 import { GRID_MAP, PROSPECT_BUILDING_ID } from "@/components/3d/hubGrid";
 import { formatAgo, useNow } from "@/lib/clock";
-import { CORE_TOOLS } from "@/lib/coreToolsMapping";
+import { CORE_TOOLS } from "@/lib/coreToolsRegistry";
 import { useTelemetryPolling } from "@/lib/use-telemetry";
 import { buildingLabel, useB2BPolling, useHubStore, useLeadsPolling, type LogLevel, type SiteStatus } from "@/store/useHubStore";
 
@@ -19,7 +21,8 @@ export function NocSidebar() {
   useTelemetryPolling();
   useLeadsPolling();
   useB2BPolling();
-  const activeTool = useHubStore((state) => state.activeTool);
+  useCoreStatePublisher();
+  const activeTool = useCoreToolsStore((state) => state.activeTool);
 
   return (
     <aside
