@@ -13,6 +13,11 @@ export const SITE_MAPPING: Readonly<Record<string, string>> = {
   "immeuble-a-fond": "geoenergy-habitat",
 };
 
+// Bâtiment du QG (site de type « hq ») : destination des PNJ Prospect. Bâtiment de prospection : il s'illumine à chaque
+// nouveau lead, et c'est là que part le PNJ Prospect. Identifiants du tableau GRID_MAP.buildings.
+export const HQ_BUILDING_ID = "immeuble-a-rue";
+export const PROSPECT_BUILDING_ID = "immeuble-a-rue-2";
+
 export type Vec3 = [number, number, number];
 
 export type BuildingModel = "building-a" | "building-c";

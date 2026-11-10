@@ -46,6 +46,11 @@ export function useTelemetryPolling() {
   );
 }
 
+// Lecture ponctuelle, hors React : la simulation 3D lit l'état à chaque image sans s'abonner au store.
+export function getTelemetryState(): TelemetryState {
+  return state;
+}
+
 export function useTelemetry() {
   return useSyncExternalStore(
     subscribe,

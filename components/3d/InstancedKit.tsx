@@ -85,12 +85,27 @@ export function StaticKit({ url, matrices, night = false }: { url: string; matri
 }
 
 // Ensemble animé : `poses` est mis à jour par le contrôleur de simulation ; les matrices suivent à chaque image.
-export function MovingKit({ url, poses }: { url: string; poses: Pose[] }) {
+// `tint` : lueur propre à cet ensemble (le PNJ Prospect), sans toucher aux autres ensembles du même modèle.
+export type Tint = { color: string; intensity: number };
+
+export function MovingKit({ url, poses, tint }: { url: string; poses: Pose[]; tint?: Tint }) {
   const { scene } = useGLTF(url);
   const { parts, meshes } = useMemo(() => {
     const parts = extractParts(scene);
     return { parts, meshes: buildMeshes(parts, poses.length) };
   }, [scene, poses.length]);
+
+  const tintColor = tint?.color;
+  const tintIntensity = tint?.intensity;
+  useEffect(() => {
+    if (tintColor === undefined || tintIntensity === undefined) return;
+    for (const part of parts) {
+      if (part.material instanceof MeshStandardMaterial) {
+        part.material.emissive.set(tintColor);
+        part.material.emissiveIntensity = tintIntensity;
+      }
+    }
+  }, [parts, tintColor, tintIntensity]);
 
   useFrame(() => {
     for (let index = 0; index < poses.length; index++) {

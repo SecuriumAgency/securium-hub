@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { CommandCenter } from "@/components/admin/CommandCenter";
 import { LiveBadge, PageHeader } from "@/components/admin/PageHeader";
-import { CONTACTED_STATUSES } from "@/lib/chasseur";
-import { prisma } from "@/lib/prisma";
+import { loadProspectionCounts } from "@/lib/prospection-counts";
 
 export const metadata: Metadata = {
   title: "Batcave · Securium Core",
@@ -15,11 +14,7 @@ export const dynamic = "force-dynamic";
 // Centre de commandement : état des agents et serveurs (télémétrie côté client), prospection (base),
 // raccourcis et workboard du jour.
 export default async function CommandPage() {
-  const [prospects, contacted, followUps] = await Promise.all([
-    prisma.outreachProspect.count({ where: { isClient: false } }),
-    prisma.outreachProspect.count({ where: { isClient: false, status: { in: [...CONTACTED_STATUSES] } } }),
-    prisma.outreachProspect.count({ where: { isClient: false, status: "Relance_1" } }),
-  ]);
+  const counts = await loadProspectionCounts();
 
   return (
     <main className="admin-shell batcave-backdrop min-h-dvh overflow-x-hidden bg-background text-foreground">
@@ -33,7 +28,7 @@ export default async function CommandPage() {
           live={<LiveBadge label="Télémétrie en direct" />}
         />
 
-        <CommandCenter summary={{ prospects, contacted, followUps }} />
+        <CommandCenter summary={counts} />
       </div>
     </main>
   );

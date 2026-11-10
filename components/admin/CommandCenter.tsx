@@ -1,21 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Box, Clapperboard, Globe, Server, type LucideIcon } from "lucide-react";
 import { DailyWorkboard } from "@/components/admin/DailyWorkboard";
+import { startPolling } from "@/lib/poll";
+import type { ProspectionCounts } from "@/lib/prospection-counts";
 import type { AgentStatus, AgentTelemetry, TelemetryReport } from "@/lib/telemetry";
 import { useTelemetry, useTelemetryPolling } from "@/lib/use-telemetry";
 
-// Chiffres tirés de la base au rendu serveur : jamais de valeur en dur.
-export type ProspectionSummary = {
-  // Prospects en base, tous statuts confondus.
-  prospects: number;
-  // Prospects démarchés : statut Envoye ou Relance_1.
-  contacted: number;
-  // Relances en cours : statut Relance_1.
-  followUps: number;
-};
+// Compteurs de prospection : le rendu serveur donne la première valeur, puis /api/prospection/stats les rafraîchit.
+const PROSPECTION_INTERVAL_MS = 30_000;
 
 // Agents du Pulse. `match` reconnaît le nom que la télémétrie donne à l'agent.
 const PULSE_AGENTS: { label: string; match: RegExp }[] = [
@@ -24,12 +19,14 @@ const PULSE_AGENTS: { label: string; match: RegExp }[] = [
   { label: "CFO", match: /\bcfo\b/i },
 ];
 
-const statusView: Record<AgentStatus | "absent", { text: string; dot: string }> = {
-  running: { text: "En ligne", dot: "bg-success shadow-[0_0_10px_var(--success)]" },
-  idle: { text: "En veille", dot: "bg-primary shadow-[0_0_10px_var(--primary)]" },
-  error: { text: "En erreur", dot: "bg-destructive shadow-[0_0_10px_var(--destructive)]" },
-  unknown: { text: "Inconnu", dot: "bg-muted-foreground" },
-  absent: { text: "Hors ligne", dot: "bg-muted-foreground" },
+// Chaque état porte sa couleur : une panne ou un agent absent se voit tout de suite.
+const statusView: Record<AgentStatus | "absent" | "loading", { text: string; dot: string; tone: string }> = {
+  running: { text: "En ligne", dot: "bg-success shadow-[0_0_10px_var(--success)]", tone: "text-success" },
+  idle: { text: "En veille", dot: "bg-primary shadow-[0_0_10px_var(--primary)]", tone: "text-muted-foreground" },
+  error: { text: "En erreur", dot: "bg-destructive shadow-[0_0_10px_var(--destructive)]", tone: "text-destructive" },
+  unknown: { text: "Inconnu", dot: "bg-muted-foreground", tone: "text-amber-400" },
+  absent: { text: "Hors ligne", dot: "bg-amber-400", tone: "text-amber-400" },
+  loading: { text: "Chargement…", dot: "animate-pulse bg-muted-foreground", tone: "text-muted-foreground" },
 };
 
 function findAgent(agents: AgentTelemetry[], match: RegExp) {
@@ -62,13 +59,24 @@ function Panel({
   );
 }
 
-export function CommandCenter({ summary }: { summary: ProspectionSummary }) {
+export function CommandCenter({ summary }: { summary: ProspectionCounts }) {
   // Une seule source de données : le store de télémétrie, alimenté ici toutes les 10 s sur cette page.
   useTelemetryPolling();
   const { data, failed } = useTelemetry();
   const report = data?.report ?? null;
   const stale = data?.stale ?? true;
-  const rows = pulseRows(report, stale);
+  // Squelette tant que la première réponse n'est pas arrivée : l'interface ne saute pas au chargement.
+  const loading = !data && !failed;
+  const rows = loading ? PULSE_AGENTS.map((entry) => ({ label: entry.label, ...statusView.loading })) : pulseRows(report, stale);
+
+  const [counts, setCounts] = useState(summary);
+  useEffect(
+    () =>
+      startPolling<ProspectionCounts>("/api/prospection/stats", PROSPECTION_INTERVAL_MS, (body) =>
+        setCounts({ prospects: body.prospects, contacted: body.contacted, followUps: body.followUps }),
+      ),
+    [],
+  );
   const processesOnline = report?.pm2.processes.filter((process) => process.status === "online").length ?? 0;
   const processesTotal = report?.pm2.processes.length ?? 0;
 
@@ -79,7 +87,7 @@ export function CommandCenter({ summary }: { summary: ProspectionSummary }) {
           {rows.map((row) => (
             <li key={row.label} className="flex min-h-[44px] items-center justify-between gap-3 text-sm">
               <span className="text-foreground">{row.label}</span>
-              <span className="flex items-center gap-2 text-muted-foreground">
+              <span className={`flex items-center gap-2 ${row.tone}`}>
                 <span aria-hidden className={`pulse-soft inline-block size-2.5 rounded-full ${row.dot}`} />
                 {row.text}
               </span>
@@ -100,9 +108,9 @@ export function CommandCenter({ summary }: { summary: ProspectionSummary }) {
 
       <Panel title="Prospection" className="xl:col-span-2">
         <dl className="grid grid-cols-3 gap-3 text-center">
-          <Figure label="En base" value={summary.prospects} />
-          <Figure label="Démarchés" value={summary.contacted} />
-          <Figure label="Relances" value={summary.followUps} />
+          <Figure label="En base" value={counts.prospects} />
+          <Figure label="Démarchés" value={counts.contacted} />
+          <Figure label="Relances" value={counts.followUps} />
         </dl>
         <Link
           href="/admin/outreach"
