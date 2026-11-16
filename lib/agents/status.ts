@@ -23,7 +23,8 @@ export const STATUS_LABEL: Record<DisplayStatus, string> = {
   unknown: "Inconnu",
   absent: "Non signalé",
   "not-watched": "Hors surveillance",
-  ready: "Prêt",
+  // En vert et compté « en cours » dans l'en-tête du cockpit ; « veille » le distingue d'un passage réel.
+  ready: "En cours · veille",
 };
 
 // Agent lancé à la demande (bouton du cockpit, page du Hub) : entre deux lancements, il est prêt. Son dernier run,

@@ -31,8 +31,8 @@ export default async function AgentsPage() {
     kind: agent.kind,
     status: state.status,
   }));
-  const running = cards.filter((card) => card.state.status === "running").length;
-  const ready = cards.filter((card) => card.state.status === "ready").length;
+  // « En cours » : agents qui tournent, et agents à la demande prêts (en veille, cf. lib/agents/status.ts).
+  const running = cards.filter((card) => card.state.status === "running" || card.state.status === "ready").length;
   const failing = cards.filter((card) => card.state.status === "error").length;
 
   const processes: ProcessRow[] = (report?.pm2.processes ?? []).map((process) => ({
@@ -58,7 +58,6 @@ export default async function AgentsPage() {
           description={
             <>
               <span className="font-semibold tabular-nums text-foreground">{running}</span> en cours ·{" "}
-              <span className="font-semibold tabular-nums text-foreground">{ready}</span> prêt{ready > 1 ? "s" : ""} ·{" "}
               <span className="font-semibold tabular-nums text-foreground">{failing}</span> en erreur ·{" "}
               <span className="font-semibold tabular-nums text-foreground">{AGENTS.length}</span> agents au catalogue
             </>
