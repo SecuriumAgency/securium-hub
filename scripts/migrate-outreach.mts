@@ -199,6 +199,7 @@ for (const file of [".env.local", ".env"]) {
     // Fichier absent : on passe au suivant.
   }
 }
+const { journaliser } = await import("../lib/poste-journal.ts");
 const key = process.env.HUB_SECRET_KEY ?? fail("HUB_SECRET_KEY introuvable (environnement, .env.local, .env).");
 let url: URL;
 try {
@@ -219,11 +220,15 @@ for (const [index, batch] of batches.entries()) {
     body: JSON.stringify(batch),
     redirect: "manual",
     signal: AbortSignal.timeout(TIMEOUT_MS),
+  }).catch(async (error: Error) => {
+    await journaliser("Migration du registre", "error", `Envoi au Hub impossible : ${error.message}`);
+    return fail(`envoi au Hub impossible : ${error.message}`);
   });
   const body = (await response.json().catch(() => null)) as
     | { created?: number; updated?: number; unchanged?: number; purged?: number; error?: string; details?: string[] }
     | null;
   if (response.status !== 200) {
+    await journaliser("Migration du registre", "error", `Lot ${index + 1}/${batches.length} refusé, HTTP ${response.status}.`);
     fail(`lot ${index + 1}/${batches.length} refusé, HTTP ${response.status} ${body?.error ?? ""}${body?.details ? `\n  ${body.details.join("\n  ")}` : ""}`);
   }
   const result = { created: body?.created ?? 0, updated: body?.updated ?? 0, unchanged: body?.unchanged ?? 0, purged: body?.purged ?? 0 };
@@ -236,4 +241,9 @@ for (const [index, batch] of batches.entries()) {
 console.log(
   `Synchronisation terminée vers ${url.origin} : ${totals.created} créé(s), ${totals.updated} mis à jour, ` +
     `${totals.unchanged} inchangé(s) (contact du Hub aussi récent ou plus), ${totals.purged} désinscrit(s) purgé(s).`,
+);
+await journaliser(
+  "Migration du registre",
+  "active",
+  `Registre synchronisé : ${totals.created} créé(s), ${totals.updated} mis à jour, ${totals.purged} désinscrit(s) purgé(s).`,
 );
