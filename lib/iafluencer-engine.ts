@@ -58,7 +58,16 @@ function parisWeekday(now: Date): string {
  * Crée les contenus de l'Auto-Pilote : une Story par jour, deux Reels par semaine (mardi et vendredi).
  * Rien n'est créé si un rush utilisateur est déjà planifié dans les 24 heures, ni sans fournisseur média.
  */
+/**
+ * Garde des publications sans validation humaine : l'Auto-Pilote ne crée et ne publie rien tant que
+ * AUTO_SEND_ENABLED ne vaut pas « true ». Les publications planifiées par un humain ne sont pas concernées.
+ */
+export function autopilotAutorise(): boolean {
+  return process.env.AUTO_SEND_ENABLED?.trim() === "true";
+}
+
 export async function createAutopilotPosts(now: Date): Promise<number> {
+  if (!autopilotAutorise()) return 0;
   const settings = await readSettings();
   if (!settings.autopilotStories && !settings.autopilotReels) return 0;
   if (!process.env.MEDIA_GENERATION_WEBHOOK_URL) return 0;
@@ -96,8 +105,9 @@ type Outcome = "published" | "failed" | "retrying";
 /** Traite au plus MAX_PER_RUN publications dont l'heure est passée. Renvoie le bilan, sans aucun contenu. */
 export async function publishDue(now: Date): Promise<{ processed: number; published: number; failed: number; retrying: number }> {
   const settings = await readSettings();
+  // Sans AUTO_SEND_ENABLED=true, les publications de l'Auto-Pilote restent en attente : seules celles d'un humain partent.
   const due = await prisma.socialPost.findMany({
-    where: { status: "PENDING", scheduledAt: { lte: now } },
+    where: { status: "PENDING", scheduledAt: { lte: now }, ...(autopilotAutorise() ? {} : { source: { not: "AUTOPILOT" } }) },
     orderBy: { scheduledAt: "asc" },
     take: MAX_PER_RUN,
   });
