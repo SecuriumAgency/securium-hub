@@ -6,6 +6,8 @@
  *   npx tsx scripts/fleet-daily-report.mts            génère et envoie
  *   npx tsx scripts/fleet-daily-report.mts --dry-run  génère seulement : le HTML est écrit dans le dossier
  *                                                    temporaire, rien n'est envoyé
+ *   npx tsx scripts/fleet-daily-report.mts --check    vérifie la connexion SMTP (identifiants compris), sans
+ *                                                    rien générer ni envoyer
  *
  * FLEET_REPORT_DRY_RUN=1 équivaut à --dry-run (pm2 start ecosystem.config.js --only securium-fleet-report --env dryrun).
  * Destinataire : FLEET_REPORT_TO, sinon contact@securium-agency.fr. Envoi : lib/mail.ts (SMTP_*).
@@ -40,8 +42,24 @@ const { fetchDeploymentStatus } = await import("../lib/vercel.ts");
 const { startOfDay, startOfMonth } = await import("../lib/month.ts");
 const { contactedProspectsWhere, INBOUND, OUTBOUND } = await import("../lib/chasseur.ts");
 const report = await import("../lib/fleet-report.ts");
-const { sendEmail } = await import("../lib/mail.ts");
+const { sendEmail, verifySmtp } = await import("../lib/mail.ts");
 const { journaliser } = await import("../lib/poste-journal.ts");
+
+// Contrôle de la connexion seule : après un changement d'identifiants IONOS, sans attendre le rapport de 20h.
+if (process.argv.includes("--check")) {
+  try {
+    await verifySmtp();
+    console.log(`${TAG} Connexion SMTP vérifiée : identifiants acceptés, rien n'a été envoyé.`);
+    await journaliser("Rapport de flotte", "active", "Connexion SMTP vérifiée (identifiants acceptés) ; rapport envoyé chaque soir à 20h.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`${TAG} Connexion SMTP refusée : ${message}`);
+    await journaliser("Rapport de flotte", "error", `Connexion SMTP refusée : ${message}`);
+    process.exitCode = 1;
+  }
+  await prisma.$disconnect();
+  process.exit();
+}
 
 const now = new Date();
 const dateLabel = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });

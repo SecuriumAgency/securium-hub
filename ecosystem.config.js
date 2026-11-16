@@ -44,15 +44,28 @@ module.exports = {
       env_dryrun: { FLEET_REPORT_DRY_RUN: "1" },
     },
     {
-      // Réception : lit la boîte IMAP toutes les 15 minutes. À démarrer seulement une fois IMAP_USER et
-      // IMAP_PASSWORD valides : sans cela, chaque passage échoue à l'authentification.
+      // Réception : lit la boîte IMAP toutes les 15 minutes (réponses et STOP). À démarrer une fois IMAP_USER et
+      // IMAP_PASSWORD (ou EMAIL_USER / EMAIL_PASS) valides : sans cela, chaque passage échoue à l'authentification.
       name: "securium-inbound",
+      // Démon léger, comme les autres tâches : « online » entre deux passages, jamais de passage au démarrage.
       script: process.execPath,
       interpreter: "none",
-      args: ["--import", "tsx", "scripts/agent-inbound.mts"],
+      args: [
+        `${DAEMONS}/job-daemon.mjs`,
+        "--name=reponses-entrantes",
+        `--cwd=${ROOT}`,
+        "--every=15",
+        "--",
+        process.execPath,
+        "--import",
+        "tsx",
+        "scripts/agent-inbound.mts",
+      ],
       cwd: ROOT,
-      cron_restart: "*/15 * * * *",
-      autorestart: false,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      restart_delay: 60000,
       time: true,
       out_file: `${LOGS}/pm2-inbound-out.log`,
       error_file: `${LOGS}/pm2-inbound-err.log`,

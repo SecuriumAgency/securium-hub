@@ -2,8 +2,9 @@ import type { AgentEvent, AgentStatus, ProcessTelemetry, TelemetryReport } from 
 import type { AgentDef } from "./registry";
 
 // `absent` : l'agent du poste n'a rien signalé dans le rapport. `not-watched` : aucun signal de cet agent dans le
-// rapport (scripts manuels, audit à la demande, workflow sans run connu).
-export type DisplayStatus = AgentStatus | "absent" | "not-watched";
+// rapport (workflow automatique sans run connu). `ready` : agent hors du poste, prêt à servir sans tourner en
+// continu (à la demande, ou planifié ailleurs que sur le poste) ; il n'a pas de passage en cours à montrer.
+export type DisplayStatus = AgentStatus | "absent" | "not-watched" | "ready";
 
 export type AgentState = {
   status: DisplayStatus;
@@ -22,7 +23,15 @@ export const STATUS_LABEL: Record<DisplayStatus, string> = {
   unknown: "Inconnu",
   absent: "Non signalé",
   "not-watched": "Hors surveillance",
+  // En vert et compté « en cours » dans l'en-tête du cockpit ; « veille » le distingue d'un passage réel.
+  ready: "En cours · veille",
 };
+
+// Agent lancé à la demande (bouton du cockpit, page du Hub) : entre deux lancements, il est prêt. Son dernier run,
+// même vieux, annulé ou échoué, reste lisible sur sa fiche (dernière action), sans le mettre en erreur.
+function isOnDemand(agent: AgentDef): boolean {
+  return Boolean(agent.triggerId) || agent.schedule.startsWith("À la demande");
+}
 
 // Planificateur actif : un démon en ligne, ou un processus cron arrêté entre deux passages (état normal, pas une panne).
 function isScheduled(process: ProcessTelemetry | undefined): boolean {
@@ -58,7 +67,11 @@ export function agentState(agent: AgentDef, report: TelemetryReport | null, stal
     // Processus PM2 : son état fait foi (cron entre deux passages = planifié). Absent de PM2 : non signalé.
     status = !fresh ? "unknown" : pm2Process ? pm2Status(pm2Process, healthy) : "absent";
   } else if (agent.kind !== "poste") {
-    status = fresh && line ? line.status : "not-watched";
+    // Run réel transmis par le poste : il fait foi, sauf pour un agent à la demande, prêt entre deux lancements.
+    // Sans télémétrie (Chasseur sur Vercel Cron, audit SEO du Hub), l'agent ne dépend pas du poste : il est prêt.
+    if (fresh && line && (line.status === "running" || !isOnDemand(agent))) status = line.status;
+    else if (!agent.telemetryName || isOnDemand(agent)) status = "ready";
+    else status = "not-watched";
   } else if (!fresh) {
     status = "unknown";
   } else if (agent.telemetryName) {

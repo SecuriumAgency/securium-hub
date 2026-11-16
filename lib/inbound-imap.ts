@@ -19,12 +19,15 @@ const ENVELOPE_CHUNK = 500;
 
 export type ImapCredentials = { host: string; port: number; user: string; pass: string };
 
-/** Identifiants de la boîte : IMAP_USER et IMAP_PASSWORD, à défaut ceux de l'envoi (SMTP_USER et SMTP_PASS). */
+/** Identifiants de la boîte : IMAP_USER et IMAP_PASSWORD, à défaut EMAIL_USER / EMAIL_PASS, puis ceux de l'envoi (SMTP_*). */
 export function imapCredentials(env: NodeJS.ProcessEnv = process.env): ImapCredentials {
   // `||` et non `??` : une variable présente mais vide (IMAP_USER="" dans .env.example) doit laisser passer le repli.
-  const user = (env.IMAP_USER || env.SMTP_USER || "").trim();
-  const pass = (env.IMAP_PASSWORD || env.SMTP_PASS || "").trim();
-  if (!user || !pass) throw new Error("identifiants IMAP absents : IMAP_USER et IMAP_PASSWORD (à défaut SMTP_USER et SMTP_PASS).");
+  // EMAIL_* : noms de la même boîte IONOS dans securium-agency-v2 et Securium-OS.
+  const user = (env.IMAP_USER || env.EMAIL_USER || env.SMTP_USER || "").trim();
+  const pass = (env.IMAP_PASSWORD || env.EMAIL_PASS || env.SMTP_PASS || "").trim();
+  if (!user || !pass) {
+    throw new Error("identifiants IMAP absents : IMAP_USER et IMAP_PASSWORD (à défaut EMAIL_USER / EMAIL_PASS, puis SMTP_USER / SMTP_PASS).");
+  }
   return { host: env.IMAP_HOST?.trim() || DEFAULT_HOST, port: Number(env.IMAP_PORT) || DEFAULT_PORT, user, pass };
 }
 
