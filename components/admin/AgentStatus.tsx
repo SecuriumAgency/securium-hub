@@ -25,9 +25,10 @@ const STATUS_TONE: Record<DisplayStatus, string> = {
   unknown: neutral,
   absent: neutral,
   "not-watched": neutral,
+  ready: "border-success/30 bg-success/10 text-success",
 };
 
-// Point lumineux : il s'allume en vert pour un agent en cours, en rouge pour une erreur.
+// Point lumineux : il s'allume en vert pour un agent en cours ou prêt, en rouge pour une erreur.
 const STATUS_DOT: Record<DisplayStatus, string> = {
   running: "bg-success shadow-[0_0_10px] shadow-success/70",
   idle: "bg-muted-foreground",
@@ -35,6 +36,7 @@ const STATUS_DOT: Record<DisplayStatus, string> = {
   unknown: "bg-muted-foreground",
   absent: "bg-muted-foreground/60",
   "not-watched": "bg-muted-foreground/40",
+  ready: "bg-success",
 };
 
 export function StatusPill({ status }: { status: DisplayStatus }) {

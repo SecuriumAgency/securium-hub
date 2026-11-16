@@ -6,19 +6,27 @@ import { isOutreachAddress, normalizeEmail, OUTREACH_DOMAIN } from "./outreach";
 // - OUTREACH_FROM : toute la prospection (validation à la main, envoi automatique), sur le domaine OUTREACH_DOMAIN.
 //   Sans OUTREACH_FROM valide sur ce domaine, rien ne part.
 // Variables : SMTP_HOST, SMTP_PORT (465 : TLS direct ; autre : STARTTLS exigé), SMTP_USER, SMTP_PASS, SMTP_FROM,
-// OUTREACH_FROM (« Securium Agency <contact@securium-agency.fr> » ou l'adresse seule).
+// OUTREACH_FROM (« Securium Agency <contact@securium-agency.fr> » ou l'adresse seule). SMTP_USER et SMTP_PASS
+// absents : EMAIL_USER et EMAIL_PASS, noms de la même boîte IONOS dans les autres dépôts du groupe.
 
 const SMTP_VARIABLES = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
 
 // Configuration absente ou invalide : rien n'a été tenté auprès du serveur.
 export class MailConfigError extends Error {}
 
+// Espaces et guillemets d'encadrement retirés : `echo … | vercel env add` laisse un retour à la ligne final, et un
+// .env recopié garde parfois ses guillemets ; dans les deux cas IONOS répond 535 (authentification refusée).
+function envValue(name: string): string {
+  return process.env[name]?.trim().replace(/^["']|["']$/g, "").trim() ?? "";
+}
+
 function smtpConfig() {
-  // Espaces retirés partout : `echo … | vercel env add` laisse un retour à la ligne final dans la valeur.
-  const env = Object.fromEntries(SMTP_VARIABLES.map((name) => [name, process.env[name]?.trim() ?? ""])) as Record<
+  const env = Object.fromEntries(SMTP_VARIABLES.map((name) => [name, envValue(name)])) as Record<
     (typeof SMTP_VARIABLES)[number],
     string
   >;
+  env.SMTP_USER ||= envValue("EMAIL_USER");
+  env.SMTP_PASS ||= envValue("EMAIL_PASS");
   const missing = SMTP_VARIABLES.filter((name) => !env[name]);
   if (missing.length > 0) throw new MailConfigError(`SMTP non configuré : ${missing.join(", ")} manquant(s).`);
   const port = Number(env.SMTP_PORT);
@@ -47,6 +55,11 @@ function mailer() {
     cached = { transporter: nodemailer.createTransport(transport), from };
   }
   return cached;
+}
+
+/** Connexion et authentification SMTP, sans rien envoyer. Lève l'erreur du serveur (535 : identifiants refusés). */
+export async function verifySmtp(): Promise<void> {
+  await mailer().transporter.verify();
 }
 
 /**
