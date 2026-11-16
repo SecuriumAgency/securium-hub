@@ -9,6 +9,8 @@ const ROOT = __dirname;
 // Journaux à côté de ceux des agents : Securium-OS/logs. Chemins construits sans require() (règle
 // no-require-imports du lint) ; PM2 accepte les barres obliques sous Windows.
 const LOGS = `${ROOT}/../Securium-OS/logs`;
+// Démon léger de planification, commun au poste : Securium-OS/scripts/job-daemon.mjs.
+const DAEMONS = `${ROOT}/../Securium-OS/scripts`;
 
 module.exports = {
   apps: [
@@ -17,14 +19,25 @@ module.exports = {
       // Node lancé directement, avec le chargeur tsx. Pas `script: "npx"` : sous Windows, PM2 fait
       // exécuter npx.cmd par Node comme du JavaScript (SyntaxError). Pas le .mts en script non plus :
       // le conteneur de PM2 le charge avec require() et refuse son await de premier niveau.
+      // Démon léger : le rapport part chaque soir à 20h00 (Paris), et jamais au démarrage.
       script: process.execPath,
       interpreter: "none",
-      args: ["--import", "tsx", "scripts/fleet-daily-report.mts"],
+      args: [
+        `${DAEMONS}/job-daemon.mjs`,
+        "--name=rapport-flotte",
+        `--cwd=${ROOT}`,
+        "--daily=20:00",
+        "--",
+        process.execPath,
+        "--import",
+        "tsx",
+        "scripts/fleet-daily-report.mts",
+      ],
       cwd: ROOT,
-      // `pm2 start` envoie un premier rapport tout de suite, puis le cron le relance chaque jour à 20h,
-      // heure du poste (Paris).
-      cron_restart: "0 20 * * *",
-      autorestart: false,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      restart_delay: 60000,
       time: true,
       out_file: `${LOGS}/pm2-fleet-report-out.log`,
       error_file: `${LOGS}/pm2-fleet-report-err.log`,
@@ -48,12 +61,27 @@ module.exports = {
       // Accroches de premier contact : brouillons seulement, rien n'est envoyé. Le script ne rédige qu'en
       // semaine, de 9h à 18h (Paris) ; le cron d'une heure ne fait que l'appeler dans cette plage.
       name: "securium-icebreakers",
+      // Démon léger : vérifie chaque heure, à la minute 0, de 9h à 18h, du lundi au vendredi (Paris).
       script: process.execPath,
       interpreter: "none",
-      args: ["--import", "tsx", "scripts/agent-icebreakers.mts"],
+      args: [
+        `${DAEMONS}/job-daemon.mjs`,
+        "--name=icebreakers",
+        `--cwd=${ROOT}`,
+        "--hourly=0",
+        "--hours=9-18",
+        "--weekdays=1-5",
+        "--",
+        process.execPath,
+        "--import",
+        "tsx",
+        "scripts/agent-icebreakers.mts",
+      ],
       cwd: ROOT,
-      cron_restart: "0 9-18 * * 1-5",
-      autorestart: false,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      restart_delay: 60000,
       time: true,
       out_file: `${LOGS}/pm2-icebreakers-out.log`,
       error_file: `${LOGS}/pm2-icebreakers-err.log`,
@@ -62,12 +90,26 @@ module.exports = {
       // Synchronisation du registre du prospecteur vers le Hub : réimport sans doublon, puis purge des
       // désinscrits. Chaque passage écrit dans la base de production (voir scripts/migrate-outreach.mts).
       name: "securium-migrate-outreach",
+      // Démon léger : la synchronisation part chaque jour à 7h30 (Paris), et jamais au démarrage.
       script: process.execPath,
       interpreter: "none",
-      args: ["--import", "tsx", "scripts/migrate-outreach.mts", "--send"],
+      args: [
+        `${DAEMONS}/job-daemon.mjs`,
+        "--name=migration-registre",
+        `--cwd=${ROOT}`,
+        "--daily=07:30",
+        "--",
+        process.execPath,
+        "--import",
+        "tsx",
+        "scripts/migrate-outreach.mts",
+        "--send",
+      ],
       cwd: ROOT,
-      cron_restart: "30 7 * * *",
-      autorestart: false,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      restart_delay: 60000,
       time: true,
       out_file: `${LOGS}/pm2-migrate-outreach-out.log`,
       error_file: `${LOGS}/pm2-migrate-outreach-err.log`,
