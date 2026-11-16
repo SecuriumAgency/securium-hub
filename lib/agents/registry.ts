@@ -42,6 +42,9 @@ export type AgentDef = {
   telemetryName?: string;
   // Processus PM2 du poste, pour l'état de fond.
   pm2Name?: string;
+  // Processus PM2 qui planifie l'agent (cron). Tant qu'il est planifié et que le dernier cycle de l'agent est sain
+  // (aucune erreur dans le journal), l'agent est actif entre deux passages.
+  plannedBy?: string;
   // Workflow GitHub lançable depuis le cockpit (identifiant de lib/agents/triggers.ts).
   triggerId?: string;
   // Pages du Hub où l'agent se voit.
@@ -72,6 +75,7 @@ export const AGENTS: AgentDef[] = [
     schedule: "Chaque jour à 20h00 (cron PM2)",
     source: "Securium-OS/scripts/sec-orchestrator.sh",
     pm2Name: "securium-orchestrator",
+    telemetryName: "Orchestrateur",
     links: [{ label: "Vue de la flotte", href: "/admin/fleet" }],
   },
   {
@@ -86,6 +90,7 @@ export const AGENTS: AgentDef[] = [
     schedule: DAILY_VIA_ORCHESTRATOR,
     source: "Securium-OS/scripts/simulate-market.sh",
     telemetryName: "Market Simulator",
+    plannedBy: "securium-orchestrator",
     links: [],
   },
   {
@@ -99,6 +104,7 @@ export const AGENTS: AgentDef[] = [
     schedule: DAILY_VIA_ORCHESTRATOR,
     source: "Securium-OS/scripts/run-prospector.sh",
     telemetryName: "Lead Prospector",
+    plannedBy: "securium-orchestrator",
     links: [{ label: "Prospection", href: "/admin/outreach" }],
   },
   {
@@ -113,6 +119,7 @@ export const AGENTS: AgentDef[] = [
     schedule: DAILY_VIA_ORCHESTRATOR,
     source: "Securium-OS/scripts/run-cfo.sh",
     telemetryName: "CFO",
+    plannedBy: "securium-orchestrator",
     links: [],
     caution: "Chiffres estimés : rien n’est une donnée réelle sans vérification.",
   },
@@ -128,6 +135,7 @@ export const AGENTS: AgentDef[] = [
     schedule: DAILY_VIA_ORCHESTRATOR,
     source: "Securium-OS/scripts/run-devops.sh",
     telemetryName: "DevOps",
+    plannedBy: "securium-orchestrator",
     links: [{ label: "Vue de la flotte", href: "/admin/fleet" }],
     caution: "La correction automatique Dependabot est désactivée par défaut.",
   },
@@ -143,6 +151,7 @@ export const AGENTS: AgentDef[] = [
     schedule: DAILY_VIA_ORCHESTRATOR,
     source: "Securium-OS/scripts/run-seo.sh",
     telemetryName: "SEO Architect",
+    plannedBy: "securium-orchestrator",
     links: [{ label: "Audit SEO", href: "/admin/seo" }],
   },
   {
@@ -156,6 +165,8 @@ export const AGENTS: AgentDef[] = [
     schedule: "23h30 chaque jour, ou dès 20 commits d’avance",
     source: "Securium-OS/scripts/sync-remote.mts",
     pm2Name: "securium-sync-remote",
+    // Même agent DevOps : sa dernière ligne du journal donne la « Dernière action » et les erreurs de push.
+    telemetryName: "DevOps",
     links: [],
     caution: "Pousse sur les dépôts distants : vérifier le périmètre avant tout ajout.",
   },
@@ -271,6 +282,7 @@ export const AGENTS: AgentDef[] = [
     outputs: ["Fusion automatique (squash)"],
     schedule: "À chaque pull request",
     source: "SecuriumAgency/geoenergyhabitat · ci-validation.yml",
+    telemetryName: "Validation CI · GeoEnergy",
     links: [],
     caution: "La fusion automatique attend que les vérifications passent.",
   },
@@ -284,6 +296,7 @@ export const AGENTS: AgentDef[] = [
     outputs: ["Rapports Lighthouse, en artefacts GitHub"],
     schedule: "À la demande",
     source: "SecuriumAgency/geoenergyhabitat · lighthouse.yml",
+    telemetryName: "Lighthouse · GeoEnergy",
     triggerId: "geo-lighthouse",
     links: [],
   },
@@ -297,6 +310,7 @@ export const AGENTS: AgentDef[] = [
     outputs: ["Demandes d’indexation"],
     schedule: "À la demande, fenêtre de fraîcheur réglable",
     source: "SecuriumAgency/geoenergyhabitat · seo-indexing.yml",
+    telemetryName: "Indexation Google · GeoEnergy",
     triggerId: "geo-indexation",
     links: [],
     caution: "Utilise une clé de service Google, écrite pour le run puis supprimée.",
@@ -311,6 +325,7 @@ export const AGENTS: AgentDef[] = [
     outputs: ["Rapports Lighthouse, en artefacts GitHub"],
     schedule: "À la demande",
     source: "SecuriumAgency/Elite-Depannage · lighthouse-ci.yml",
+    telemetryName: "Lighthouse · Elite Dépannage",
     triggerId: "elite-lighthouse",
     links: [],
   },
