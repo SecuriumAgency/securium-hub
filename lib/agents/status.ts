@@ -54,12 +54,13 @@ export function agentState(agent: AgentDef, report: TelemetryReport | null, stal
   const healthy = line?.status !== "error";
 
   let status: DisplayStatus;
-  if (agent.kind !== "poste") {
+  if (agent.pm2Name) {
+    // Processus PM2 : son état fait foi (cron entre deux passages = planifié). Absent de PM2 : non signalé.
+    status = !fresh ? "unknown" : pm2Process ? pm2Status(pm2Process, healthy) : "absent";
+  } else if (agent.kind !== "poste") {
     status = fresh && line ? line.status : "not-watched";
   } else if (!fresh) {
     status = "unknown";
-  } else if (pm2Process) {
-    status = pm2Status(pm2Process, healthy);
   } else if (agent.telemetryName) {
     // Agent de script : « arrêté » entre deux cycles est normal si son planificateur tourne.
     status = line ? (line.status === "idle" && isScheduled(planner) ? "running" : line.status) : "absent";

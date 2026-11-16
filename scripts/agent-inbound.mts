@@ -24,6 +24,7 @@ for (const file of [".env.local", ".env"]) {
 }
 const { imapCredentials, pollInbox } = await import("../lib/inbound-imap.ts");
 const { prisma } = await import("../lib/prisma.ts");
+const { journaliser } = await import("../lib/poste-journal.ts");
 
 try {
   const result = await pollInbox({ credentials: imapCredentials(), dryRun });
@@ -35,9 +36,16 @@ try {
       `${result.recorded} réponse(s) enregistrée(s), ${result.alreadyStored} déjà présente(s), ${result.stops} STOP ; ` +
         `${result.failed} en échec, ${result.leftForNextRun} reportée(s) au passage suivant.`,
     );
+    await journaliser(
+      "Réponses entrantes",
+      "active",
+      `${result.recorded} réponse(s) enregistrée(s), ${result.stops} STOP, ${result.failed} en échec.`,
+    );
   }
 } catch (error) {
-  console.error(`Arrêt : ${error instanceof Error ? error.message : "erreur inconnue"}`);
+  const message = error instanceof Error ? error.message : "erreur inconnue";
+  console.error(`Arrêt : ${message}`);
+  if (!dryRun) await journaliser("Réponses entrantes", "error", `Arrêt : ${message}`);
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();

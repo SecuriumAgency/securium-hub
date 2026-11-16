@@ -68,6 +68,7 @@ const chasseur = await import("../lib/chasseur.ts");
 const icebreaker = await import("../lib/outreach-ai.ts");
 const { PipelineStatus } = await import("../lib/generated/prisma/enums.ts");
 const { prisma } = await import("../lib/prisma.ts");
+const { journaliser } = await import("../lib/poste-journal.ts");
 
 // RGPD : la blocklist fait foi. Sans elle, un désinscrit pourrait recevoir un brouillon.
 const blocklistFile = path.join(option("data") ?? DEFAULT_DATA, "blocklist.json");
@@ -149,7 +150,17 @@ try {
       `Passage terminé : ${outcome.drafted} icebreaker(s) à valider sur /admin/outreach, ${outcome.rejected} écarté(s) ou refusé(s), ` +
         `${outcome.gone} prospect(s) modifié(s) entre-temps.`,
     );
+    await journaliser(
+      "Icebreakers",
+      "active",
+      `${outcome.drafted} accroche(s) à valider, ${outcome.rejected} écartée(s) ou refusée(s), ${outcome.gone} prospect(s) modifié(s).`,
+    );
   }
+} catch (error) {
+  const message = error instanceof Error ? error.message : "erreur inconnue";
+  console.error(`Arrêt : ${message}`);
+  if (!dryRun) await journaliser("Icebreakers", "error", `Arrêt : ${message}`);
+  process.exitCode = 1;
 } finally {
   await prisma.$disconnect();
 }

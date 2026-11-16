@@ -41,6 +41,7 @@ const { startOfDay, startOfMonth } = await import("../lib/month.ts");
 const { contactedProspectsWhere, INBOUND, OUTBOUND } = await import("../lib/chasseur.ts");
 const report = await import("../lib/fleet-report.ts");
 const { sendEmail } = await import("../lib/mail.ts");
+const { journaliser } = await import("../lib/poste-journal.ts");
 
 const now = new Date();
 const dateLabel = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });
@@ -96,9 +97,12 @@ try {
   } else {
     const { messageId } = await sendEmail({ to: recipient, subject: `Rapport quotidien de la flotte Securium — ${dateLabel}`, html, text });
     console.log(`${TAG} Rapport envoyé avec succès à ${recipient} (${summary}). Message-ID ${messageId}.`);
+    await journaliser("Rapport de flotte", "active", `Rapport quotidien envoyé : ${summary}.`);
   }
 } catch (error) {
-  console.error(`${TAG} Échec du rapport : ${error instanceof Error ? error.message : String(error)}`);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`${TAG} Échec du rapport : ${message}`);
+  if (!dryRun) await journaliser("Rapport de flotte", "error", `Échec de l'envoi : ${message}`);
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();

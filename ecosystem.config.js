@@ -30,5 +30,47 @@ module.exports = {
       error_file: `${LOGS}/pm2-fleet-report-err.log`,
       env_dryrun: { FLEET_REPORT_DRY_RUN: "1" },
     },
+    {
+      // Réception : lit la boîte IMAP toutes les 15 minutes. À démarrer seulement une fois IMAP_USER et
+      // IMAP_PASSWORD valides : sans cela, chaque passage échoue à l'authentification.
+      name: "securium-inbound",
+      script: process.execPath,
+      interpreter: "none",
+      args: ["--import", "tsx", "scripts/agent-inbound.mts"],
+      cwd: ROOT,
+      cron_restart: "*/15 * * * *",
+      autorestart: false,
+      time: true,
+      out_file: `${LOGS}/pm2-inbound-out.log`,
+      error_file: `${LOGS}/pm2-inbound-err.log`,
+    },
+    {
+      // Accroches de premier contact : brouillons seulement, rien n'est envoyé. Le script ne rédige qu'en
+      // semaine, de 9h à 18h (Paris) ; le cron d'une heure ne fait que l'appeler dans cette plage.
+      name: "securium-icebreakers",
+      script: process.execPath,
+      interpreter: "none",
+      args: ["--import", "tsx", "scripts/agent-icebreakers.mts"],
+      cwd: ROOT,
+      cron_restart: "0 9-18 * * 1-5",
+      autorestart: false,
+      time: true,
+      out_file: `${LOGS}/pm2-icebreakers-out.log`,
+      error_file: `${LOGS}/pm2-icebreakers-err.log`,
+    },
+    {
+      // Synchronisation du registre du prospecteur vers le Hub : réimport sans doublon, puis purge des
+      // désinscrits. Chaque passage écrit dans la base de production (voir scripts/migrate-outreach.mts).
+      name: "securium-migrate-outreach",
+      script: process.execPath,
+      interpreter: "none",
+      args: ["--import", "tsx", "scripts/migrate-outreach.mts", "--send"],
+      cwd: ROOT,
+      cron_restart: "30 7 * * *",
+      autorestart: false,
+      time: true,
+      out_file: `${LOGS}/pm2-migrate-outreach-out.log`,
+      error_file: `${LOGS}/pm2-migrate-outreach-err.log`,
+    },
   ],
 };
