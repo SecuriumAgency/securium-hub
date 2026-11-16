@@ -24,9 +24,9 @@ export const STATUS_LABEL: Record<DisplayStatus, string> = {
   "not-watched": "Hors surveillance",
 };
 
-// Processus planifié (cron) arrêté entre deux passages : état normal, pas une panne.
+// Planificateur actif : un démon en ligne, ou un processus cron arrêté entre deux passages (état normal, pas une panne).
 function isScheduled(process: ProcessTelemetry | undefined): boolean {
-  return Boolean(process?.cron) && (process?.status === "stopped" || process?.status === "online");
+  return process?.status === "online" || (process?.status === "stopped" && Boolean(process.cron));
 }
 
 // Statut d'un processus PM2 lié à l'agent. `healthy` : dernière ligne du journal de l'agent sans erreur.
