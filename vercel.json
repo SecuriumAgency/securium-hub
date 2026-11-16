@@ -5,7 +5,6 @@
     { "path": "/api/cron/seo-audit", "schedule": "0 6 * * 1" },
     { "path": "/api/cron/prospector", "schedule": "0 2 * * 1-5" },
     { "path": "/api/cron/chasseur", "schedule": "0 8 * * 1-5" },
-    { "path": "/api/cron/auto-sender", "schedule": "0 8 * * 1-5" },
     { "path": "/api/cron/publish", "schedule": "0 8 * * *" }
   ]
 }
