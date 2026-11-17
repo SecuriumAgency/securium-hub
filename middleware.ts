@@ -14,6 +14,9 @@ const PUBLIC_PATHS = new Set([
   "/robots.txt",
   "/sitemap.xml",
   "/api/leads/inbound",
+  // Lien « Appeler » des notifications Discord, ouvert depuis le téléphone de l'artisan : redirige vers
+  // tel:<numéro E.164>, ne lit aucune donnée (app/appel/route.ts).
+  "/appel",
   "/api/cron/fleet-status",
   "/api/cron/seo-audit",
   "/api/cron/publish",
