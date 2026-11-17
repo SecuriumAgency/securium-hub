@@ -31,7 +31,7 @@ export default async function AgentsPage() {
     kind: agent.kind,
     status: state.status,
   }));
-  // « En cours » : agents qui tournent, et agents à la demande prêts (en veille, cf. lib/agents/status.ts).
+  // « En cours » : agents qui tournent, et agents hors du poste prêts entre deux runs (cf. lib/agents/status.ts).
   const running = cards.filter((card) => card.state.status === "running" || card.state.status === "ready").length;
   const failing = cards.filter((card) => card.state.status === "error").length;
 

@@ -24,7 +24,6 @@ const STATUS_TONE: Record<DisplayStatus, string> = {
   error: "border-destructive/30 bg-destructive/10 text-destructive",
   unknown: neutral,
   absent: neutral,
-  "not-watched": neutral,
   ready: "border-success/30 bg-success/10 text-success",
 };
 
@@ -35,7 +34,6 @@ const STATUS_DOT: Record<DisplayStatus, string> = {
   error: "bg-destructive shadow-[0_0_10px] shadow-destructive/70",
   unknown: "bg-muted-foreground",
   absent: "bg-muted-foreground/60",
-  "not-watched": "bg-muted-foreground/40",
   ready: "bg-success",
 };
 
